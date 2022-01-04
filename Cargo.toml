@@ -1,0 +1,22 @@
+[package]
+edition = "2021"
+name = "bkmrk"
+version = "0.1.0"
+
+[dependencies]
+clap = "2.34"
+dirs = "4.0"
+nanoid = "0.4"
+simple-error = "*"
+rusqlite = { version = "0.26", features = ["bundled", "chrono"] }
+quick-xml = "0.22"
+chrono = "0.4"
+terminal_size = "0.1"
+regex = "1.5"
+unescape = "0.1"
+tabled = "0.4"
+console = "0.15"
+itertools = "0.10"
+log = "0.4"
+fern = "0.6"
+dialoguer = "0.9"
