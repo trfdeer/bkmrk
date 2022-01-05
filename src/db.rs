@@ -1,11 +1,9 @@
-use std::{collections::HashSet, fs::File, path::Path};
+use std::{collections::HashSet, fs::File, path::Path, rc::Rc};
 
 use chrono::Utc;
-use itertools::Itertools;
 use log::{error, info};
 use nanoid::nanoid;
-use regex::Regex;
-use rusqlite::{params, Connection};
+use rusqlite::{params, types::Value, Connection};
 use simple_error::{bail, SimpleError};
 
 use crate::bookmark::{Bookmark, TagList};
@@ -58,6 +56,7 @@ impl Database {
             Ok(conn) => Self { conn },
             Err(e) => bail!("ERROR: Couldn't connect to db: {}", e),
         };
+
         if new_db {
             match db.create_tables() {
                 Ok(_) => Ok(db),
@@ -77,11 +76,11 @@ impl Database {
         "INSERT INTO `Bookmark` (id, name, link, added_at, last_modified, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             id,
-            Regex::new("[\"']").unwrap().replace_all(&bookmark.name.replace('\\', r"\\"), "''"),
-            Regex::new("[\"']").unwrap().replace_all(&bookmark.link, "''"),
+            bookmark.name,
+            bookmark.link,
             bookmark.added_at,
             bookmark.last_modified,
-            Regex::new("[\"']").unwrap().replace_all(&bookmark.description, "''"),
+            bookmark.description,
         ],
     ) {
         Ok(_) => (),
@@ -92,7 +91,7 @@ impl Database {
             self.conn
                 .execute(
                     "INSERT INTO `Tag` (bookmark_id, tag) VALUES (?1, ?2)",
-                    params![id, Regex::new("[\"']").unwrap().replace_all(tag, "''"),],
+                    params![id, tag],
                 )
                 .unwrap();
         }
@@ -119,18 +118,18 @@ impl Database {
     }
 
     pub fn delete_bookmark(&self, bookmark_id: &str) -> Result<(), SimpleError> {
-        match self.conn.execute(
-            &format!("DELETE FROM `Tag` WHERE bookmark_id LIKE '{}'", bookmark_id),
-            [],
-        ) {
+        match self
+            .conn
+            .execute("DELETE FROM `Tag` WHERE bookmark_id LIKE ?1", [bookmark_id])
+        {
             Ok(_) => (),
             Err(e) => bail!("ERROR: Failed to delete related tags: {}", e),
         }
 
-        match self.conn.execute(
-            &format!("DELETE FROM `Bookmark` WHERE id LIKE '{}'", bookmark_id),
-            [],
-        ) {
+        match self
+            .conn
+            .execute("DELETE FROM `Bookmark` WHERE id LIKE ?1", [bookmark_id])
+        {
             Ok(_) => (),
             Err(e) => bail!("ERROR: Failed to remove bookmark from database: {}", e),
         }
@@ -236,14 +235,11 @@ impl Database {
         bookmark: &Bookmark,
         new_name: &str,
     ) -> Result<(), SimpleError> {
-        let query = format!(
-            "UPDATE `Bookmark` SET name = \"{}\", last_modified = {} WHERE id LIKE {};",
-            Regex::new("[\"']").unwrap().replace_all(new_name, "''"),
-            Utc::now().timestamp(),
-            bookmark.id
-        );
-
-        match self.conn.execute(&query, []) {
+        let query = "UPDATE `Bookmark` SET name = ?1, last_modified = ?2 WHERE id LIKE ?3;";
+        match self.conn.execute(
+            query,
+            [new_name, &Utc::now().timestamp().to_string(), &bookmark.id],
+        ) {
             Ok(_) => info!("Renamed '{}' to '{}'", bookmark.name, new_name),
             Err(e) => bail!("ERROR: Failed to update databse: {}", e),
         }
@@ -256,14 +252,11 @@ impl Database {
         bookmark: &Bookmark,
         new_link: &str,
     ) -> Result<(), SimpleError> {
-        let query = format!(
-            "UPDATE `Bookmark` SET link = \"{}\", last_modified = {} WHERE id LIKE {};",
-            Regex::new("[\"']").unwrap().replace_all(new_link, "''"),
-            Utc::now().timestamp(),
-            bookmark.id
-        );
-
-        match self.conn.execute(&query, []) {
+        let query = "UPDATE `Bookmark` SET link = ?1, last_modified = ?2 WHERE id LIKE ?3;";
+        match self.conn.execute(
+            query,
+            [new_link, &Utc::now().timestamp().to_string(), &bookmark.id],
+        ) {
             Ok(_) => info!("Changed link from '{}' to '{}'", bookmark.link, new_link),
             Err(e) => bail!("ERROR: Failed to update databse: {}", e),
         }
@@ -276,15 +269,15 @@ impl Database {
         bookmark: &Bookmark,
         new_description: &str,
     ) -> Result<(), SimpleError> {
-        let query =
-            format!(
-            "UPDATE `Bookmark` SET description = \"{}\", last_modified = '{}' WHERE id LIKE {};",
-            Regex::new("[\"']").unwrap().replace_all(new_description, "''"),
-            Utc::now().timestamp(),
-            bookmark.id
-        );
-
-        match self.conn.execute(&query, []) {
+        let query = "UPDATE `Bookmark` SET description = ?1, last_modified = ?2 WHERE id LIKE ?3;";
+        match self.conn.execute(
+            query,
+            [
+                new_description,
+                &Utc::now().timestamp().to_string(),
+                &bookmark.id,
+            ],
+        ) {
             Ok(_) => info!(
                 "Changed description from '{}' to '{}'",
                 bookmark.description, new_description
@@ -300,31 +293,34 @@ impl Database {
         bookmark: &Bookmark,
         new_tags: &[String],
     ) -> Result<(), SimpleError> {
+        rusqlite::vtab::array::load_module(&self.conn).unwrap();
+
         let old_tags: HashSet<_> = bookmark.tags.0.iter().collect();
         let new_tags: HashSet<_> = new_tags.iter().collect();
 
         let added_tags: Vec<_> = new_tags.difference(&old_tags).collect();
-        let deleted_tags = old_tags
-            .difference(&new_tags)
-            .map(|x| format!("'{}'", x))
-            .join(", ");
+        let deleted_tags = old_tags.difference(&new_tags);
 
-        let delete_query = format!(
-            "DELETE FROM `Tag` WHERE bookmark_id LIKE {} AND tag IN ({})",
-            bookmark.id, deleted_tags
+        let values = Rc::new(
+            deleted_tags
+                .copied()
+                .map(|s| Value::from(s.to_owned()))
+                .collect::<Vec<Value>>(),
         );
-        match self.conn.execute(&delete_query, []) {
-            Ok(_) => info!("Deleted tags {}", deleted_tags),
+
+        let mut delete_query = self
+            .conn
+            .prepare("DELETE FROM `Tag` WHERE bookmark_id LIKE ?1 AND tag IN rarray(?)")
+            .unwrap();
+        match delete_query.execute(params![bookmark.id, values]) {
+            Ok(c) => info!("Deleted {} tags", c),
             Err(e) => bail!("ERROR: Failed to update databse: {}", e),
         }
 
         for tag in added_tags {
             match self.conn.execute(
                 "INSERT INTO `Tag` (bookmark_id, tag) VALUES (?1, ?2)",
-                params![
-                    bookmark.id,
-                    Regex::new("[\"']").unwrap().replace_all(tag, "''"),
-                ],
+                params![bookmark.id, tag],
             ) {
                 Ok(_) => info!("Added tag '{}' to '{}'", tag, bookmark.name),
                 Err(_) => error!("Failed to add tag '{}' to '{}'", tag, bookmark.name),
@@ -359,11 +355,8 @@ impl Database {
     }
 
     pub fn rename_tag(&self, old: &str, new: &str) -> Result<usize, SimpleError> {
-        let query = format!(
-            "UPDATE `Tag` SET tag = \"{}\" WHERE tag LIKE \"{}\"",
-            new, old
-        );
-        match self.conn.execute(&query, []) {
+        let query = "UPDATE `Tag` SET tag = ?1 WHERE tag LIKE ?2";
+        match self.conn.execute(query, [new, old]) {
             Ok(c) => {
                 info!("Renamed {} items to {}.", c, new);
                 Ok(c)

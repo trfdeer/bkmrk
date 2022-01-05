@@ -56,21 +56,22 @@ pub fn parse_netscape_bookmark_file(
                         .unwrap_or(&String::default())
                         .to_owned()
                         .split(',')
-                        .map(String::from)
+                        .map(utils::squeeze_whitespaces)
                         .filter(|x| !x.is_empty())
                         .collect();
 
                     if append_folder_tags {
                         let mut folder_tags = tags
                             .iter_mut()
-                            .map(|x| x.to_owned())
+                            .map(|x| utils::squeeze_whitespaces(x))
                             .filter(|x| !x.is_empty())
                             .collect::<Vec<String>>();
                         bk_tags.append(&mut folder_tags);
                     }
 
-                    new_bookmark.link =
-                        attributes.get("HREF").unwrap().to_owned().trim().to_owned();
+                    new_bookmark.link = utils::squeeze_whitespaces(
+                        &attributes.get("HREF").unwrap().to_owned().trim().to_owned(),
+                    );
                     new_bookmark.tags =
                         TagList(bk_tags.iter().unique().map(String::from).collect());
                     new_bookmark.added_at = attributes
@@ -110,7 +111,9 @@ pub fn parse_netscape_bookmark_file(
                 }
                 ("A", "close") => {
                     let mut bk = bookmarks.pop().unwrap();
-                    bk.description = t.unescape_and_decode(&reader).unwrap_or_default();
+                    bk.description = utils::squeeze_whitespaces(
+                        &t.unescape_and_decode(&reader).unwrap_or_default(),
+                    );
                     bookmarks.push(bk);
                 }
                 _ => (),

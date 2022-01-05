@@ -28,7 +28,6 @@ pub fn exec_delete(args: &ArgMatches) -> Result<(), SimpleError> {
 
     println!("Select bookmarks to edit:");
     let indices = MultiSelect::new().items(&options).interact().unwrap();
-    println!("{:?}", indices);
 
     let items = indices
         .iter()

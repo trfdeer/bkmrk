@@ -4,7 +4,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use regex::Regex;
 
 pub fn squeeze_whitespaces(text: &str) -> String {
-    let ws = Regex::new(r"\s+").unwrap();
+    let ws = Regex::new(r"[\s\n]+").unwrap();
     let new_str = ws.replace_all(text, " ");
     new_str.into_owned()
 }

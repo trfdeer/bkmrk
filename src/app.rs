@@ -73,7 +73,6 @@ pub fn run_app() -> Result<(), SimpleError> {
             (about: "Delete Bookmarks")
             (@arg tags: -t --tags +takes_value ... "Show bookmarks from these tags only")
             (@arg domains: -d --domains +takes_value ... "Show bookmarks from these sites only")
-            (@arg yes: -y --yes "Delete all matches without confirmation")
         )
         (@subcommand tag =>
             (about: "Mange tags")
