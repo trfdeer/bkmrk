@@ -1,4 +1,4 @@
-use crate::{bookmark::Bookmark, db::Database, utils};
+use bkmrk_lib::BkmrkMan;
 use clap::ArgMatches;
 
 use dialoguer::MultiSelect;
@@ -16,7 +16,9 @@ pub fn exec_delete(args: &ArgMatches) -> Result<(), SimpleError> {
         .map(String::from)
         .collect();
 
-    let items = match Bookmark::get_matching_bookmarks(&tags, &domains) {
+    let man = BkmrkMan::new();
+
+    let items = match man.get_bookmarks(&tags, &domains) {
         Ok(r) => r,
         Err(e) => bail!("ERROR: Failed running ls command.\n{}", e),
     };
@@ -34,10 +36,7 @@ pub fn exec_delete(args: &ArgMatches) -> Result<(), SimpleError> {
         .map(|&idx| items[idx].to_owned())
         .collect::<Vec<_>>();
 
-    let db_path = utils::files::get_db_path().unwrap();
-    let db = Database::connect(&db_path).unwrap();
-
-    let (succeeded, failed) = db.delete_bookmarks(&items).unwrap();
+    let (succeeded, failed) = man.delete_bookmarks(&items).unwrap();
     println!("{} Deleted. {} Failed", succeeded, failed);
 
     Ok(())

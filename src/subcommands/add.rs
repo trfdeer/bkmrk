@@ -1,12 +1,10 @@
+use bkmrk_lib::{
+    bookmark::{Bookmark, TagList},
+    BkmrkMan,
+};
 use chrono::Utc;
 use clap::ArgMatches;
 use simple_error::{bail, SimpleError};
-
-use crate::{
-    bookmark::{Bookmark, TagList},
-    db::Database,
-    utils,
-};
 
 pub fn exec_add(args: &ArgMatches) -> Result<(), SimpleError> {
     let name: String = args.value_of("name").unwrap().into();
@@ -30,9 +28,8 @@ pub fn exec_add(args: &ArgMatches) -> Result<(), SimpleError> {
         ..Default::default()
     };
 
-    let db_path = utils::files::get_db_path().unwrap();
-    let db = Database::connect(&db_path).unwrap();
-    match db.add_bookmark(&new_bookmark) {
+    let man = BkmrkMan::new();
+    match man.add_bookmark(&new_bookmark) {
         Ok(_) => println!("Added bookmark."),
         Err(e) => bail!("ERROR: Failed to add bookmark\n{}", e),
     };

@@ -1,8 +1,7 @@
+use bkmrk_lib::BkmrkMan;
 use clap::ArgMatches;
 use dialoguer::{console::Term, theme::ColorfulTheme, Confirm, Input, Select};
 use simple_error::{bail, SimpleError};
-
-use crate::{bookmark::Bookmark, db::Database, utils};
 
 pub fn exec_edit(args: &ArgMatches) -> Result<(), SimpleError> {
     let tags: Vec<String> = args
@@ -16,7 +15,9 @@ pub fn exec_edit(args: &ArgMatches) -> Result<(), SimpleError> {
         .map(String::from)
         .collect();
 
-    let items = match Bookmark::get_matching_bookmarks(&tags, &domains) {
+    let man = BkmrkMan::new();
+
+    let items = match man.get_bookmarks(&tags, &domains) {
         Ok(r) => r,
         Err(e) => bail!("ERROR: Failed running edit command.\n{}", e),
     };
@@ -32,28 +33,25 @@ pub fn exec_edit(args: &ArgMatches) -> Result<(), SimpleError> {
         .interact_on_opt(&Term::stderr())
         .unwrap()
     {
-        let db_path = utils::files::get_db_path().unwrap();
-        let db = Database::connect(&db_path).unwrap();
-
         let editing = &items[index];
 
         if prompt("Update name?") {
             let new_name = get_input("Enter new name", &editing.name);
-            match db.update_bookmark_name(editing, &new_name) {
+            match man.update_bookmark_name(editing, &new_name) {
                 Ok(_) => println!("Name updated to '{}'!", new_name),
                 Err(e) => bail!("ERROR: Failed to update name.\n{}", e),
             }
         }
         if prompt("Update link?") {
             let new_link = get_input("Enter new link", &editing.link);
-            match db.update_bookmark_link(editing, &new_link) {
+            match man.update_bookmark_link(editing, &new_link) {
                 Ok(_) => println!("Link updated to '{}'!", new_link),
                 Err(e) => bail!("ERROR: Failed to update link.\n{}", e),
             }
         }
         if prompt("Update description?") {
             let new_description = get_input("Enter new description", &editing.description);
-            match db.update_bookmark_description(editing, &new_description) {
+            match man.update_bookmark_descr(editing, &new_description) {
                 Ok(_) => println!("Description updated to '{}'!", new_description),
                 Err(e) => bail!("ERROR: Failed to update description.\n{}", e),
             }
@@ -67,7 +65,7 @@ pub fn exec_edit(args: &ArgMatches) -> Result<(), SimpleError> {
                 .split(',')
                 .map(|x| x.trim().to_owned())
                 .collect::<Vec<_>>();
-            match db.update_bookmark_tags(editing, &new_tags) {
+            match man.update_bookmark_tags(editing, &new_tags) {
                 Ok(_) => println!("Tags updated to '{}'!", new_tags.join(", ")),
                 Err(e) => bail!("ERROR: Failed to update tags.\n{}", e),
             }

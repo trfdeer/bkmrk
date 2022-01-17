@@ -1,4 +1,5 @@
-use crate::bookmark::Bookmark;
+use crate::utils;
+use bkmrk_lib::BkmrkMan;
 use clap::ArgMatches;
 use simple_error::{bail, SimpleError};
 
@@ -14,7 +15,9 @@ pub fn exec_ls(args: &ArgMatches) -> Result<(), SimpleError> {
         .map(String::from)
         .collect();
 
-    let items = match Bookmark::get_matching_bookmarks(&tags, &domains) {
+    let man = BkmrkMan::new();
+
+    let items = match man.get_bookmarks(&tags, &domains) {
         Ok(r) => r,
         Err(e) => bail!("ERROR: Failed running ls command.\n{}", e),
     };
@@ -23,12 +26,16 @@ pub fn exec_ls(args: &ArgMatches) -> Result<(), SimpleError> {
 
     let output_type = args.value_of("output_type").unwrap_or("table");
     match output_type {
-        "table" => println!("{}", Bookmark::get_table(&items)),
+        "table" => {
+            let terminal_dims = terminal_size::terminal_size().unwrap();
+            let terminal_dims = (terminal_dims.0 .0 as usize, terminal_dims.1 .0 as usize);
+            println!("{}", utils::get_bookmark_table(&items, terminal_dims))
+        }
         "format-string" => {
             let format_string = args.value_of("format_string").unwrap_or("%n - %l [%t]");
 
             for it in items {
-                println!("{}", unescape::unescape(&it.format(format_string)).unwrap());
+                println!("{}", it.format(format_string));
             }
         }
         e => bail!("ERROR: Invalid output type: {}", e),

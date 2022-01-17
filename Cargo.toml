@@ -4,19 +4,13 @@ name = "bkmrk"
 version = "0.1.0"
 
 [dependencies]
-chrono = "0.4"
 clap = "2.34"
 console = "0.15"
 dialoguer = "0.9"
-dirs = "4.0"
 fern = "0.6"
-itertools = "0.10"
-log = "0.4"
-nanoid = "0.4"
-quick-xml = "0.22"
-regex = "1.5"
-rusqlite = { version = "0.26", features = ["bundled", "chrono", "array"] }
 simple-error = "0.2"
 tabled = "0.4"
 terminal_size = "0.1"
-unescape = "0.1"
+log = "0.4"
+bkmrk-lib = { path = "./bkmrk-lib", features = ["tables"] }
+chrono = "0.4"

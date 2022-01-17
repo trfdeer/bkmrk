@@ -1,9 +1,6 @@
 use std::process::exit;
 
 mod app;
-mod bookmark;
-mod db;
-mod netscape_bookmark_parser;
 mod subcommands;
 mod utils;
 

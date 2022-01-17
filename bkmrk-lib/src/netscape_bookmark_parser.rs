@@ -70,7 +70,7 @@ pub fn parse_netscape_bookmark_file(
                     }
 
                     new_bookmark.link = utils::squeeze_whitespaces(
-                        &attributes.get("HREF").unwrap().to_owned().trim().to_owned(),
+                        attributes.get("HREF").unwrap().to_owned().trim(),
                     );
                     new_bookmark.tags =
                         TagList(bk_tags.iter().unique().map(String::from).collect());

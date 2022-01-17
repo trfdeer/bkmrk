@@ -67,7 +67,7 @@ impl Database {
         }
     }
 
-    pub fn add_bookmark(&self, bookmark: &Bookmark) -> Result<(), SimpleError> {
+    pub fn add_one(&self, bookmark: &Bookmark) -> Result<(), SimpleError> {
         let id = nanoid!(
             6,
             &['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f']
@@ -99,10 +99,10 @@ impl Database {
         Ok(())
     }
 
-    pub fn add_bookmarks(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize), SimpleError> {
+    pub fn add_many(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize), SimpleError> {
         let (mut succeeded, mut failed) = (0, 0);
         for bookmark in bookmarks {
-            match self.add_bookmark(bookmark) {
+            match self.add_one(bookmark) {
                 Ok(_) => {
                     info!("Added bookmark '{}'", bookmark.name);
                     succeeded += 1;
@@ -117,7 +117,7 @@ impl Database {
         Ok((succeeded, failed))
     }
 
-    pub fn delete_bookmark(&self, bookmark_id: &str) -> Result<(), SimpleError> {
+    pub fn delete_one(&self, bookmark_id: &str) -> Result<(), SimpleError> {
         match self
             .conn
             .execute("DELETE FROM `Tag` WHERE bookmark_id LIKE ?1", [bookmark_id])
@@ -137,10 +137,10 @@ impl Database {
         Ok(())
     }
 
-    pub fn delete_bookmarks(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize), SimpleError> {
+    pub fn delete_many(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize), SimpleError> {
         let (mut succeeded, mut failed) = (0, 0);
         for bookmark in bookmarks {
-            match self.delete_bookmark(&bookmark.id) {
+            match self.delete_one(&bookmark.id) {
                 Ok(_) => {
                     info!("Deleted {}", bookmark.name);
                     succeeded += 1;
@@ -157,7 +157,7 @@ impl Database {
         Ok((succeeded, failed))
     }
 
-    pub fn get_all_bookmarks(&self) -> Result<Vec<Bookmark>, SimpleError> {
+    pub fn get_all(&self) -> Result<Vec<Bookmark>, SimpleError> {
         let mut select_statement = self.conn.prepare("SELECT * FROM `Bookmark`").unwrap();
         let matches: Vec<Bookmark> = select_statement
             .query_map([], |row| {
@@ -169,7 +169,7 @@ impl Database {
                     added_at: row.get_unwrap(3),
                     last_modified: row.get_unwrap(4),
                     description: row.get_unwrap(5),
-                    tags: self.get_bookmark_tags(&id),
+                    tags: self.get_tags(&id),
                 };
                 Ok(item)
             })
@@ -180,11 +180,7 @@ impl Database {
         Ok(matches)
     }
 
-    pub fn get_bookmarks(
-        &self,
-        tags: &[String],
-        domains: &[String],
-    ) -> Result<Vec<Bookmark>, SimpleError> {
+    pub fn get(&self, tags: &[String], domains: &[String]) -> Result<Vec<Bookmark>, SimpleError> {
         let mut select_statement: String = "SELECT * FROM `Bookmark` WHERE ".into();
 
         if !tags.is_empty() {
@@ -219,7 +215,7 @@ impl Database {
                     added_at: row.get_unwrap(3),
                     last_modified: row.get_unwrap(4),
                     description: row.get_unwrap(5),
-                    tags: self.get_bookmark_tags(&id),
+                    tags: self.get_tags(&id),
                 };
                 Ok(item)
             })
@@ -230,11 +226,7 @@ impl Database {
         Ok(matches)
     }
 
-    pub fn update_bookmark_name(
-        &self,
-        bookmark: &Bookmark,
-        new_name: &str,
-    ) -> Result<(), SimpleError> {
+    pub fn update_name(&self, bookmark: &Bookmark, new_name: &str) -> Result<(), SimpleError> {
         let query = "UPDATE `Bookmark` SET name = ?1, last_modified = ?2 WHERE id LIKE ?3;";
         match self.conn.execute(
             query,
@@ -247,11 +239,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn update_bookmark_link(
-        &self,
-        bookmark: &Bookmark,
-        new_link: &str,
-    ) -> Result<(), SimpleError> {
+    pub fn update_link(&self, bookmark: &Bookmark, new_link: &str) -> Result<(), SimpleError> {
         let query = "UPDATE `Bookmark` SET link = ?1, last_modified = ?2 WHERE id LIKE ?3;";
         match self.conn.execute(
             query,
@@ -264,7 +252,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn update_bookmark_description(
+    pub fn update_descr(
         &self,
         bookmark: &Bookmark,
         new_description: &str,
@@ -288,11 +276,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn update_bookmark_tags(
-        &self,
-        bookmark: &Bookmark,
-        new_tags: &[String],
-    ) -> Result<(), SimpleError> {
+    pub fn update_tags(&self, bookmark: &Bookmark, new_tags: &[String]) -> Result<(), SimpleError> {
         rusqlite::vtab::array::load_module(&self.conn).unwrap();
 
         let old_tags: HashSet<_> = bookmark.tags.0.iter().collect();
@@ -330,7 +314,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_bookmark_tags(&self, bookmark_id: &str) -> TagList {
+    fn get_tags(&self, bookmark_id: &str) -> TagList {
         let mut tag_query = self
             .conn
             .prepare("SELECT tag FROM `Tag` WHERE bookmark_id LIKE ?1")
@@ -343,7 +327,7 @@ impl Database {
             .into()
     }
 
-    pub fn delete_tag(&self, tag: &str) -> Result<usize, SimpleError> {
+    pub fn tag_delete(&self, tag: &str) -> Result<usize, SimpleError> {
         let query = "DELETE FROM `Tag` WHERE tag LIKE ?1";
         match self.conn.execute(query, [tag]) {
             Ok(c) => {
@@ -354,7 +338,7 @@ impl Database {
         }
     }
 
-    pub fn rename_tag(&self, old: &str, new: &str) -> Result<usize, SimpleError> {
+    pub fn tag_rename(&self, old: &str, new: &str) -> Result<usize, SimpleError> {
         let query = "UPDATE `Tag` SET tag = ?1 WHERE tag LIKE ?2";
         match self.conn.execute(query, [new, old]) {
             Ok(c) => {

@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use bkmrk_lib::BkmrkMan;
 use clap::ArgMatches;
 use simple_error::{bail, SimpleError};
-
-use crate::{db::Database, netscape_bookmark_parser, utils};
 
 pub fn exec_import(args: &ArgMatches) -> Result<(), SimpleError> {
     let dry_run: bool = args.is_present("dry_run");
@@ -32,24 +31,21 @@ fn import_netscape_bookmark_file(
     append_folder_tags: bool,
     dry_run: bool,
 ) -> Result<(), SimpleError> {
-    let db_path = utils::files::get_db_path().unwrap();
-    let db = Database::connect(&db_path).unwrap();
+    let man = BkmrkMan::new();
 
-    let bookmarks =
-        match netscape_bookmark_parser::parse_netscape_bookmark_file(file_path, append_folder_tags)
-        {
-            Ok(t) => t,
-            Err(e) => {
-                bail!(
-                    "ERROR: Couldn't parse input file `{}`\n{}",
-                    file_path.display(),
-                    e
-                )
-            }
-        };
+    let bookmarks = match man.parse_netscape_file(file_path, append_folder_tags) {
+        Ok(t) => t,
+        Err(e) => {
+            bail!(
+                "ERROR: Couldn't parse input file `{}`\n{}",
+                file_path.display(),
+                e
+            )
+        }
+    };
 
     if !dry_run {
-        let (succeeded, failed) = db.add_bookmarks(&bookmarks).unwrap();
+        let (succeeded, failed) = man.add_bookmarks(&bookmarks).unwrap();
         println!("{} Added. {} Failed", succeeded, failed);
     } else {
         for bookmark in bookmarks {
