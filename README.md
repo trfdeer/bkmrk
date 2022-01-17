@@ -22,5 +22,5 @@ SUBCOMMANDS:
     help      Prints this message or the help of the given subcommand(s)
     import    Import bookmarks from a file
     ls        List available bookmarks
-    tag       Mange tags
+    tag       Manage tags
 ```

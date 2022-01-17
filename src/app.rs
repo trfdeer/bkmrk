@@ -75,7 +75,7 @@ pub fn run_app() -> Result<(), SimpleError> {
             (@arg domains: -d --domains +takes_value ... "Show bookmarks from these sites only")
         )
         (@subcommand tag =>
-            (about: "Mange tags")
+            (about: "Manage tags")
             (@arg tag_name: -t long("tag-name") +takes_value +required "Tag name")
             (@arg rename: -r --rename +takes_value "New tag name")
             (@arg delete: -d --delete "Delete tag")
