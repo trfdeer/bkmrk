@@ -11,6 +11,6 @@ fern = "0.6"
 simple-error = "0.2"
 tabled = "0.4"
 terminal_size = "0.1"
-log = "0.4"
 bkmrk-lib = { path = "./bkmrk-lib", features = ["tables"] }
 chrono = "0.4"
+log = "0.4"

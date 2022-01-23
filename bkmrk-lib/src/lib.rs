@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use bookmark::Bookmark;
+use chrono::Utc;
 use simple_error::{bail, SimpleError};
 
 use crate::db::Database;
@@ -21,7 +22,30 @@ impl BkmrkMan {
         Self { db }
     }
 
-    pub fn parse_netscape_file(
+    pub fn import_bookmark_file(
+        &self,
+        file_path: &Path,
+        append_folder_tags: bool,
+    ) -> Result<(usize, usize), SimpleError> {
+        let bookmarks = match netscape_bookmark_parser::parse_netscape_bookmark_file(
+            file_path,
+            append_folder_tags,
+        ) {
+            Ok(t) => t,
+            Err(e) => {
+                bail!(
+                    "ERROR: Couldn't parse input file `{}`\n{}",
+                    file_path.display(),
+                    e
+                )
+            }
+        };
+
+        let (succeeded, failed) = self.add_bookmarks(&bookmarks).unwrap();
+        Ok((succeeded, failed))
+    }
+
+    pub fn read_bookmark_file(
         &self,
         file_path: &Path,
         append_folder_tags: bool,
@@ -46,7 +70,12 @@ impl BkmrkMan {
     }
 
     pub fn add_bookmark(&self, bookmark: &Bookmark) -> Result<(), SimpleError> {
-        self.db.add_one(bookmark)
+        let mut bookmark = bookmark.to_owned();
+        let time_now = Utc::now().timestamp();
+        bookmark.added_at = time_now;
+        bookmark.last_modified = time_now;
+
+        self.db.add_one(&bookmark)
     }
 
     pub fn add_bookmarks(&self, bookmark: &[Bookmark]) -> Result<(usize, usize), SimpleError> {

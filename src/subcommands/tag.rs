@@ -3,7 +3,7 @@ use clap::ArgMatches;
 use simple_error::{bail, SimpleError};
 
 pub fn exec_tag(args: &ArgMatches) -> Result<(), SimpleError> {
-    let tag_name = args.value_of("tag_name").unwrap();
+    let tag_name = args.value_of("tag-name").unwrap();
 
     let man = BkmrkMan::new();
 
