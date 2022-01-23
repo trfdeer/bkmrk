@@ -1,4 +1,6 @@
-use clap::{Parser, Subcommand};
+#![deny(missing_docs)]
+
+use clap::{ArgEnum, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[clap(name = "bkmrk")]
@@ -12,8 +14,15 @@ pub struct App {
     pub command: Commands,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum OutputType {
+    Table,
+    FormatString,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    #[clap(visible_alias = "a")]
     /// Add a new bookmark
     Add {
         #[clap(short, long)]
@@ -32,22 +41,23 @@ pub enum Commands {
         /// Bookmark Description
         description: Option<String>,
     },
+
+    #[clap(visible_alias = "ls")]
     /// List available bookmarks
     List {
-        #[clap(short, long, default_value_t = String::from("table"))]
-        /// Specify output type. Values: [table(default), format-string]
-        output_type: String,
+        #[clap(short, long, arg_enum, default_value_t = OutputType::Table)]
+        /// Specify output type
+        output_type: OutputType,
 
         #[clap(short, long, default_value_t = String::from("%n - %l [%t]"))]
         /// Specify output format string. Ignored if output-type is not set to format-string.
         /// Available Options:
-        ///     %n for name,
-        ///     %l for link,
-        ///     %a for add date,
-        ///     %m for modified date,
-        ///     %t for tags,
-        ///     %d for description.
-        /// Default: %n - %l [%t]
+        /// %n for name,
+        /// %l for link,
+        /// %a for add date,
+        /// %m for modified date,
+        /// %t for tags,
+        /// %d for description.
         format_string: String,
 
         #[clap(short, long)]
@@ -58,6 +68,8 @@ pub enum Commands {
         /// Show bookmarks from these sites only
         domains: Vec<String>,
     },
+
+    #[clap(visible_alias = "e")]
     /// Edit a bookmark
     Edit {
         #[clap(short, long)]
@@ -68,6 +80,8 @@ pub enum Commands {
         /// Show bookmarks from these sites only
         domains: Vec<String>,
     },
+
+    #[clap(visible_alias = "i")]
     /// Import bookmarks from a file
     Import {
         input_file: String,
@@ -79,10 +93,12 @@ pub enum Commands {
         /// Do not import. Only show bookmarks to be imported
         dry_run: bool,
 
-        #[clap(short = 'l')]
+        #[clap(short = 'l', long)]
         /// Append bookmark folders as tags
         append_folder_tags: bool,
     },
+
+    #[clap(visible_alias = "d")]
     /// Delete Bookmarks
     Delete {
         #[clap(short, long)]
@@ -93,6 +109,8 @@ pub enum Commands {
         /// Show bookmarks from these sites only
         domains: Vec<String>,
     },
+
+    #[clap(visible_alias = "t")]
     /// Manage tags
     Tag {
         /// Name of tag to manage

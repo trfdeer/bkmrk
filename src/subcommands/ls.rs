@@ -1,9 +1,9 @@
-use crate::utils;
+use crate::{app::OutputType, utils};
 use bkmrk_lib::BkmrkMan;
 use color_eyre::{eyre::eyre, Result};
 
 pub struct ListArgs {
-    output_type: String,
+    output_type: OutputType,
     format_string: String,
     tags: Vec<String>,
     domains: Vec<String>,
@@ -11,7 +11,7 @@ pub struct ListArgs {
 
 impl ListArgs {
     pub fn new(
-        output_type: String,
+        output_type: OutputType,
         format_string: String,
         tags: Vec<String>,
         domains: Vec<String>,
@@ -33,19 +33,18 @@ pub fn run(args: ListArgs) -> Result<()> {
     let items = man.get_bookmarks(&tags, &domains)?;
     println!("Got {} items.", items.len());
 
-    match args.output_type.as_str() {
-        "table" => {
+    match args.output_type {
+        OutputType::Table => {
             let terminal_dims =
                 terminal_size::terminal_size().ok_or(eyre!("Couldn't get terminal size"))?;
             let terminal_dims = (terminal_dims.0 .0 as usize, terminal_dims.1 .0 as usize);
             println!("{}", utils::get_bookmark_table(&items, terminal_dims))
         }
-        "format-string" => {
+        OutputType::FormatString => {
             for it in items {
                 println!("{}", it.format(&args.format_string));
             }
         }
-        e => return Err(eyre!("Invalid output type: {}", e)),
     }
 
     Ok(())

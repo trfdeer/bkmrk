@@ -9,6 +9,7 @@ use crate::db::Database;
 pub mod bookmark;
 mod db;
 mod netscape_bookmark_parser;
+pub mod site_metadata;
 mod utils;
 
 pub struct BkmrkMan {
