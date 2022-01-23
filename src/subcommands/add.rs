@@ -2,19 +2,31 @@ use bkmrk_lib::{
     bookmark::{Bookmark, TagList},
     BkmrkMan,
 };
-use clap::ArgMatches;
 use color_eyre::Result;
 
-pub fn exec_add(args: &ArgMatches) -> Result<()> {
-    let name: String = args.value_of("name").unwrap().into();
-    let link: String = args.value_of("link").unwrap().into();
-    let tags: TagList = args
-        .values_of("tags")
-        .unwrap_or_default()
-        .map(String::from)
-        .collect::<Vec<_>>()
-        .into();
-    let description: String = args.value_of("description").unwrap_or_default().into();
+pub struct AddArgs {
+    name: String,
+    link: String,
+    tags: Vec<String>,
+    description: Option<String>,
+}
+
+impl AddArgs {
+    pub fn new(name: String, link: String, tags: Vec<String>, description: Option<String>) -> Self {
+        Self {
+            name,
+            link,
+            tags,
+            description,
+        }
+    }
+}
+
+pub fn run(args: AddArgs) -> Result<()> {
+    let name: String = args.name;
+    let link: String = args.link;
+    let tags: TagList = args.tags.into();
+    let description: String = args.description.unwrap_or_else(|| "".into());
 
     let new_bookmark = Bookmark {
         name,

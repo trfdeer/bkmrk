@@ -1,19 +1,114 @@
-use clap::clap_app;
-use color_eyre::{eyre::WrapErr, Result};
+use clap::{Parser, Subcommand};
 
-#[macro_export]
-macro_rules! run_subcommand {
-    ($cmd:ident, $arg:expr,  $err_msg:literal) => {
-        $cmd($arg).wrap_err($err_msg)?
-    };
+#[derive(Debug, Parser)]
+#[clap(name = "bkmrk")]
+#[clap(about = "A bookmark manager")]
+pub struct App {
+    #[clap(short, long)]
+    /// Enable verbose output
+    pub verbose: bool,
+
+    #[clap(subcommand)]
+    pub command: Commands,
 }
 
-fn setup_logger(verbosity: u64) -> Result<(), fern::InitError> {
-    let verbosity = match verbosity {
-        0 => log::LevelFilter::Error,
-        1 => log::LevelFilter::Warn,
-        _ => log::LevelFilter::Info,
-    };
+#[derive(Debug, Subcommand)]
+pub enum Commands {
+    /// Add a new bookmark
+    Add {
+        #[clap(short, long)]
+        /// Bookmark Name
+        name: String,
+
+        #[clap(short, long)]
+        /// Bookmark Link
+        link: String,
+
+        #[clap(short, long)]
+        /// Bookmark Tags
+        tags: Vec<String>,
+
+        #[clap(short, long)]
+        /// Bookmark Description
+        description: Option<String>,
+    },
+    /// List available bookmarks
+    List {
+        #[clap(short, long, default_value_t = String::from("table"))]
+        /// Specify output type. Values: [table(default), format-string]
+        output_type: String,
+
+        #[clap(short, long, default_value_t = String::from("%n - %l [%t]"))]
+        /// Specify output format string. Ignored if output-type is not set to format-string.
+        /// Available Options:
+        ///     %n for name,
+        ///     %l for link,
+        ///     %a for add date,
+        ///     %m for modified date,
+        ///     %t for tags,
+        ///     %d for description.
+        /// Default: %n - %l [%t]
+        format_string: String,
+
+        #[clap(short, long)]
+        /// Show bookmarks from these tags only
+        tags: Vec<String>,
+
+        #[clap(short, long)]
+        /// Show bookmarks from these sites only
+        domains: Vec<String>,
+    },
+    /// Edit a bookmark
+    Edit {
+        #[clap(short, long)]
+        /// Show bookmarks from these tags only
+        tags: Vec<String>,
+
+        #[clap(short, long)]
+        /// Show bookmarks from these sites only
+        domains: Vec<String>,
+    },
+    /// Import bookmarks from a file
+    Import {
+        input_file: String,
+        #[clap(short, long, default_value_t = String::from("netscape"))]
+        /// Input file format
+        file_format: String,
+
+        #[clap(short, long)]
+        /// Do not import. Only show bookmarks to be imported
+        dry_run: bool,
+
+        #[clap(short = 'l')]
+        /// Append bookmark folders as tags
+        append_folder_tags: bool,
+    },
+    /// Delete Bookmarks
+    Delete {
+        #[clap(short, long)]
+        /// Show bookmarks from these tags only
+        tags: Vec<String>,
+
+        #[clap(short, long)]
+        /// Show bookmarks from these sites only
+        domains: Vec<String>,
+    },
+    /// Manage tags
+    Tag {
+        /// Name of tag to manage
+        name: String,
+
+        #[clap(short, long)]
+        /// New tag name to rename to
+        rename: Option<String>,
+
+        #[clap(short, long)]
+        /// Delete tag
+        delete: bool,
+    },
+}
+
+pub fn setup_logger(verbose: bool) -> Result<(), fern::InitError> {
     fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
@@ -24,77 +119,12 @@ fn setup_logger(verbosity: u64) -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(verbosity)
+        .level(if verbose {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Error
+        })
         .chain(std::io::stdout())
         .apply()?;
-    Ok(())
-}
-
-pub fn run_app() -> Result<()> {
-    use super::subcommands::{
-        add::exec_add, delete::exec_delete, edit::exec_edit, import::exec_import, ls::exec_ls,
-        tag::exec_tag,
-    };
-
-    let matches = clap_app!(bkmrk =>
-        (version: "0.1")
-        (about: "Bookmark Manager")
-        (@arg verbose: -v --verbose ... "Enable verbose output")
-        (@subcommand add =>
-            (about: "Add a new bookmark")
-            (@arg name: -n --name +takes_value +required "Bookmark name")
-            (@arg link: -l --link +takes_value +required "Bookmark link")
-            (@arg tags: -t --tags +takes_value ... "Bookmark tags")
-            (@arg description: -d --description +takes_value "Bookmark description")
-        )
-        (@subcommand ls =>
-            (about: "List available bookmarks")
-            (@arg output_type: -o long("output-type") +takes_value "Specify output type. Values: [table(default), format-string].")
-            (@arg format_string: -f long("format-string") +takes_value ... "Specify output format string. Ignored if output-type is not set to format-string.\nAvailable Options:\n    %n for name\n    %l for link\n    %a for add date\n    %m for modified date\n    %t for tags\n    %d for description\nDefault: %n - %l [%t]")
-            (@arg tags: -t --tags +takes_value ... "Show bookmarks from these tags only")
-            (@arg domains: -d --domains +takes_value ... "Show bookmarks from these sites only")
-        )
-        (@subcommand edit =>
-            (about: "Edit a bookmark")
-            (@arg tags: -t --tags +takes_value ... "Show bookmarks from these tags only")
-            (@arg domains: -d --domains +takes_value ... "Show bookmarks from these sites only")
-        )
-        (@subcommand import =>
-            (about: "Import bookmarks from a file")
-            (@arg file_format: -f long("file-format") +takes_value "Input file format")
-            (@arg dry_run: -d --dry "Do not import. Only show bookmarks to be imported")
-            (@arg append_folder_tags: -l long("append-folder-tags") "Append bookmark folders as tags")
-            (@arg input_file: +required "The file to import")
-        )
-         (@subcommand delete =>
-            (about: "Delete Bookmarks")
-            (@arg tags: -t --tags +takes_value ... "Show bookmarks from these tags only")
-            (@arg domains: -d --domains +takes_value ... "Show bookmarks from these sites only")
-        )
-        (@subcommand tag =>
-            (about: "Manage tags")
-            (@arg tag_name: -t long("tag-name") +takes_value +required "Tag name")
-            (@arg rename: -r --rename +takes_value "New tag name")
-            (@arg delete: -d --delete "Delete tag")
-        )
-    )
-    .get_matches();
-
-    let verbosity = matches.occurrences_of("verbose");
-    setup_logger(verbosity)?;
-
-    let (command, args) = matches.subcommand();
-    let args = args.unwrap(); // Will be changed, when upgrading clap to 3.0
-
-    match command {
-        "add" => run_subcommand!(exec_add, args, "Failed running add command"),
-        "ls" => run_subcommand!(exec_ls, args, "Failed running ls command"),
-        "edit" => run_subcommand!(exec_edit, args, "Failed running edit command"),
-        "import" => run_subcommand!(exec_import, args, "Failed running import command"),
-        "delete" => run_subcommand!(exec_delete, args, "Failed running delete command"),
-        "tag" => run_subcommand!(exec_tag, args, "Failed running tag command"),
-        _ => {}
-    }
-
     Ok(())
 }

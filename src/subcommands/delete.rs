@@ -1,20 +1,22 @@
 use bkmrk_lib::BkmrkMan;
-use clap::ArgMatches;
 
 use color_eyre::Result;
 use dialoguer::MultiSelect;
 
-pub fn exec_delete(args: &ArgMatches) -> Result<()> {
-    let tags: Vec<String> = args
-        .values_of("tags")
-        .unwrap_or_default()
-        .map(String::from)
-        .collect();
-    let domains: Vec<String> = args
-        .values_of("domains")
-        .unwrap_or_default()
-        .map(String::from)
-        .collect();
+pub struct DeleteArgs {
+    tags: Vec<String>,
+    domains: Vec<String>,
+}
+
+impl DeleteArgs {
+    pub fn new(tags: Vec<String>, domains: Vec<String>) -> Self {
+        Self { tags, domains }
+    }
+}
+
+pub fn run(args: DeleteArgs) -> Result<()> {
+    let tags: Vec<String> = args.tags;
+    let domains: Vec<String> = args.domains;
 
     let man = BkmrkMan::new();
 

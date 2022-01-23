@@ -4,7 +4,7 @@ name = "bkmrk"
 version = "0.1.0"
 
 [dependencies]
-clap = "2.34"
+clap = { version = "3.0", features = ["derive"] }
 console = "0.15"
 dialoguer = "0.9"
 fern = "0.6"

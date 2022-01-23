@@ -1,19 +1,21 @@
 use bkmrk_lib::BkmrkMan;
-use clap::ArgMatches;
 use color_eyre::Result;
 use dialoguer::{console::Term, theme::ColorfulTheme, Confirm, Input, Select};
 
-pub fn exec_edit(args: &ArgMatches) -> Result<()> {
-    let tags: Vec<String> = args
-        .values_of("tags")
-        .unwrap_or_default()
-        .map(String::from)
-        .collect();
-    let domains: Vec<String> = args
-        .values_of("domains")
-        .unwrap_or_default()
-        .map(String::from)
-        .collect();
+pub struct EditArgs {
+    tags: Vec<String>,
+    domains: Vec<String>,
+}
+
+impl EditArgs {
+    pub fn new(tags: Vec<String>, domains: Vec<String>) -> Self {
+        Self { tags, domains }
+    }
+}
+
+pub fn run(args: EditArgs) -> Result<()> {
+    let tags: Vec<String> = args.tags;
+    let domains: Vec<String> = args.domains;
 
     let man = BkmrkMan::new();
 
