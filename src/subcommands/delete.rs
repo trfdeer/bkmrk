@@ -1,10 +1,10 @@
 use bkmrk_lib::BkmrkMan;
 use clap::ArgMatches;
 
+use color_eyre::Result;
 use dialoguer::MultiSelect;
-use simple_error::{bail, SimpleError};
 
-pub fn exec_delete(args: &ArgMatches) -> Result<(), SimpleError> {
+pub fn exec_delete(args: &ArgMatches) -> Result<()> {
     let tags: Vec<String> = args
         .values_of("tags")
         .unwrap_or_default()
@@ -18,10 +18,7 @@ pub fn exec_delete(args: &ArgMatches) -> Result<(), SimpleError> {
 
     let man = BkmrkMan::new();
 
-    let items = match man.get_bookmarks(&tags, &domains) {
-        Ok(r) => r,
-        Err(e) => bail!("ERROR: Failed running ls command.\n{}", e),
-    };
+    let items = man.get_bookmarks(&tags, &domains)?;
 
     let options: Vec<_> = items
         .iter()

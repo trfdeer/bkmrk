@@ -1,13 +1,10 @@
 use clap::clap_app;
-use simple_error::{bail, SimpleError};
+use color_eyre::{eyre::WrapErr, Result};
 
 #[macro_export]
 macro_rules! run_subcommand {
     ($cmd:ident, $arg:expr,  $err_msg:literal) => {
-        match $cmd($arg) {
-            Ok(_) => (),
-            Err(e) => bail!("ERROR: {}\n{}", $err_msg, e),
-        }
+        $cmd($arg).wrap_err($err_msg)?
     };
 }
 
@@ -33,7 +30,7 @@ fn setup_logger(verbosity: u64) -> Result<(), fern::InitError> {
     Ok(())
 }
 
-pub fn run_app() -> Result<(), SimpleError> {
+pub fn run_app() -> Result<()> {
     use super::subcommands::{
         add::exec_add, delete::exec_delete, edit::exec_edit, import::exec_import, ls::exec_ls,
         tag::exec_tag,
@@ -84,10 +81,10 @@ pub fn run_app() -> Result<(), SimpleError> {
     .get_matches();
 
     let verbosity = matches.occurrences_of("verbose");
-    setup_logger(verbosity).unwrap();
+    setup_logger(verbosity)?;
 
     let (command, args) = matches.subcommand();
-    let args = args.unwrap();
+    let args = args.unwrap(); // Will be changed, when upgrading clap to 3.0
 
     match command {
         "add" => run_subcommand!(exec_add, args, "Failed running add command"),

@@ -1,10 +1,10 @@
 use std::{collections::HashSet, fs::File, path::Path, rc::Rc};
 
 use chrono::Utc;
+use eyre::{Result, WrapErr};
 use log::{error, info};
 use nanoid::nanoid;
 use rusqlite::{params, types::Value, Connection};
-use simple_error::{bail, SimpleError};
 
 use crate::bookmark::{Bookmark, TagList};
 
@@ -15,7 +15,7 @@ pub struct Database {
 
 #[allow(dead_code)]
 impl Database {
-    pub fn create_tables(&self) -> Result<(), SimpleError> {
+    pub fn create_tables(&self) -> Result<()> {
         let query = "
             CREATE TABLE IF NOT EXISTS `Bookmark`(
                 id CHAR(6) PRIMARY KEY,
@@ -31,75 +31,48 @@ impl Database {
                 tag VARCHAR(100),
                 FOREIGN KEY (bookmark_id) REFERENCES `Bookmark`(id)
             );";
-        match self.conn.execute_batch(query) {
-            Ok(_) => info!("Created tables"),
-            Err(e) => bail!("ERROR: Couldn't create tables: {}", e),
-        }
-
+        self.conn.execute_batch(query)?;
         Ok(())
     }
 
-    pub fn connect(path: &Path) -> Result<Self, SimpleError> {
+    pub fn connect(path: &Path) -> Result<Self> {
         let mut new_db = false;
         if !path.exists() {
             new_db = true;
-            match File::create(path) {
-                Ok(_) => (),
-                Err(e) => bail!(
-                    "ERROR: Couldn't create database file at {}: {}",
-                    path.display(),
-                    e
-                ),
-            };
+            File::create(path)
+                .wrap_err_with(|| format!("Couldn't create database file at {}", path.display()))?;
         }
-        let db = match Connection::open(path) {
-            Ok(conn) => Self { conn },
-            Err(e) => bail!("ERROR: Couldn't connect to db: {}", e),
-        };
+        let conn = Connection::open(path).wrap_err_with(|| format!("Couldn't connect to db"))?;
+        let db = Self { conn };
 
         if new_db {
-            match db.create_tables() {
-                Ok(_) => Ok(db),
-                Err(e) => bail!("ERROR: Couldn't create database tables: {}", e),
-            }
-        } else {
-            Ok(db)
+            db.create_tables()
+                .wrap_err_with(|| format!("Couldn't create database tables"))?;
         }
+        Ok(db)
     }
 
-    pub fn add_one(&self, bookmark: &Bookmark) -> Result<(), SimpleError> {
+    pub fn add_one(&self, bookmark: &Bookmark) -> Result<()> {
         let id = nanoid!(
             6,
             &['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f']
         );
-        match self.conn.execute(
-        "INSERT INTO `Bookmark` (id, name, link, added_at, last_modified, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![
-            id,
-            bookmark.name,
-            bookmark.link,
-            bookmark.added_at,
-            bookmark.last_modified,
-            bookmark.description,
-        ],
-    ) {
-        Ok(_) => (),
-        Err(e) => bail!("ERROR: Failed to save bookmark to database: {}", e)
-    };
+        self.conn.execute(
+            "INSERT INTO `Bookmark` (id, name, link, added_at, last_modified, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, bookmark.name, bookmark.link, bookmark.added_at, bookmark.last_modified, bookmark.description],
+        )?;
 
         for tag in &bookmark.tags.0 {
-            self.conn
-                .execute(
-                    "INSERT INTO `Tag` (bookmark_id, tag) VALUES (?1, ?2)",
-                    params![id, tag],
-                )
-                .unwrap();
+            self.conn.execute(
+                "INSERT INTO `Tag` (bookmark_id, tag) VALUES (?1, ?2)",
+                params![id, tag],
+            )?;
         }
 
         Ok(())
     }
 
-    pub fn add_many(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize), SimpleError> {
+    pub fn add_many(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize)> {
         let (mut succeeded, mut failed) = (0, 0);
         for bookmark in bookmarks {
             match self.add_one(bookmark) {
@@ -117,27 +90,19 @@ impl Database {
         Ok((succeeded, failed))
     }
 
-    pub fn delete_one(&self, bookmark_id: &str) -> Result<(), SimpleError> {
-        match self
-            .conn
+    pub fn delete_one(&self, bookmark_id: &str) -> Result<()> {
+        self.conn
             .execute("DELETE FROM `Tag` WHERE bookmark_id LIKE ?1", [bookmark_id])
-        {
-            Ok(_) => (),
-            Err(e) => bail!("ERROR: Failed to delete related tags: {}", e),
-        }
+            .wrap_err("Couldn't bookmark")?;
 
-        match self
-            .conn
+        self.conn
             .execute("DELETE FROM `Bookmark` WHERE id LIKE ?1", [bookmark_id])
-        {
-            Ok(_) => (),
-            Err(e) => bail!("ERROR: Failed to remove bookmark from database: {}", e),
-        }
+            .wrap_err("Couldn't delete related tags")?;
 
         Ok(())
     }
 
-    pub fn delete_many(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize), SimpleError> {
+    pub fn delete_many(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize)> {
         let (mut succeeded, mut failed) = (0, 0);
         for bookmark in bookmarks {
             match self.delete_one(&bookmark.id) {
@@ -157,8 +122,8 @@ impl Database {
         Ok((succeeded, failed))
     }
 
-    pub fn get_all(&self) -> Result<Vec<Bookmark>, SimpleError> {
-        let mut select_statement = self.conn.prepare("SELECT * FROM `Bookmark`").unwrap();
+    pub fn get_all(&self) -> Result<Vec<Bookmark>> {
+        let mut select_statement = self.conn.prepare("SELECT * FROM `Bookmark`")?;
         let matches: Vec<Bookmark> = select_statement
             .query_map([], |row| {
                 let id: String = row.get_unwrap(0);
@@ -169,18 +134,18 @@ impl Database {
                     added_at: row.get_unwrap(3),
                     last_modified: row.get_unwrap(4),
                     description: row.get_unwrap(5),
-                    tags: self.get_tags(&id),
+                    tags: self
+                        .get_tags(&id)
+                        .map_err(|_| rusqlite::Error::QueryReturnedNoRows)?,
                 };
                 Ok(item)
-            })
-            .unwrap()
-            .map(|x| x.unwrap())
-            .collect();
+            })?
+            .collect::<Result<Vec<Bookmark>, _>>()?;
 
         Ok(matches)
     }
 
-    pub fn get(&self, tags: &[String], domains: &[String]) -> Result<Vec<Bookmark>, SimpleError> {
+    pub fn get(&self, tags: &[String], domains: &[String]) -> Result<Vec<Bookmark>> {
         let mut select_statement: String = "SELECT * FROM `Bookmark` WHERE ".into();
 
         if !tags.is_empty() {
@@ -203,7 +168,7 @@ impl Database {
             select_statement += &format!("({})", domains.join(" OR "));
         }
 
-        let mut select_statement = self.conn.prepare(&select_statement).unwrap();
+        let mut select_statement = self.conn.prepare(&select_statement)?;
 
         let matches: Vec<Bookmark> = select_statement
             .query_map([], |row| {
@@ -215,7 +180,9 @@ impl Database {
                     added_at: row.get_unwrap(3),
                     last_modified: row.get_unwrap(4),
                     description: row.get_unwrap(5),
-                    tags: self.get_tags(&id),
+                    tags: self
+                        .get_tags(&id)
+                        .map_err(|_| rusqlite::Error::QueryReturnedNoRows)?,
                 };
                 Ok(item)
             })
@@ -226,58 +193,43 @@ impl Database {
         Ok(matches)
     }
 
-    pub fn update_name(&self, bookmark: &Bookmark, new_name: &str) -> Result<(), SimpleError> {
+    pub fn update_name(&self, bookmark: &Bookmark, new_name: &str) -> Result<()> {
         let query = "UPDATE `Bookmark` SET name = ?1, last_modified = ?2 WHERE id LIKE ?3;";
-        match self.conn.execute(
+        self.conn.execute(
             query,
             [new_name, &Utc::now().timestamp().to_string(), &bookmark.id],
-        ) {
-            Ok(_) => info!("Renamed '{}' to '{}'", bookmark.name, new_name),
-            Err(e) => bail!("ERROR: Failed to update databse: {}", e),
-        }
+        )?;
 
         Ok(())
     }
 
-    pub fn update_link(&self, bookmark: &Bookmark, new_link: &str) -> Result<(), SimpleError> {
+    pub fn update_link(&self, bookmark: &Bookmark, new_link: &str) -> Result<()> {
         let query = "UPDATE `Bookmark` SET link = ?1, last_modified = ?2 WHERE id LIKE ?3;";
-        match self.conn.execute(
+
+        self.conn.execute(
             query,
             [new_link, &Utc::now().timestamp().to_string(), &bookmark.id],
-        ) {
-            Ok(_) => info!("Changed link from '{}' to '{}'", bookmark.link, new_link),
-            Err(e) => bail!("ERROR: Failed to update databse: {}", e),
-        }
+        )?;
 
         Ok(())
     }
 
-    pub fn update_descr(
-        &self,
-        bookmark: &Bookmark,
-        new_description: &str,
-    ) -> Result<(), SimpleError> {
+    pub fn update_descr(&self, bookmark: &Bookmark, new_description: &str) -> Result<()> {
         let query = "UPDATE `Bookmark` SET description = ?1, last_modified = ?2 WHERE id LIKE ?3;";
-        match self.conn.execute(
+        self.conn.execute(
             query,
             [
                 new_description,
                 &Utc::now().timestamp().to_string(),
                 &bookmark.id,
             ],
-        ) {
-            Ok(_) => info!(
-                "Changed description from '{}' to '{}'",
-                bookmark.description, new_description
-            ),
-            Err(e) => bail!("ERROR: Failed to update databse: {}", e),
-        }
+        )?;
 
         Ok(())
     }
 
-    pub fn update_tags(&self, bookmark: &Bookmark, new_tags: &[String]) -> Result<(), SimpleError> {
-        rusqlite::vtab::array::load_module(&self.conn).unwrap();
+    pub fn update_tags(&self, bookmark: &Bookmark, new_tags: &[String]) -> Result<(usize, usize)> {
+        rusqlite::vtab::array::load_module(&self.conn)?;
 
         let old_tags: HashSet<_> = bookmark.tags.0.iter().collect();
         let new_tags: HashSet<_> = new_tags.iter().collect();
@@ -294,58 +246,47 @@ impl Database {
 
         let mut delete_query = self
             .conn
-            .prepare("DELETE FROM `Tag` WHERE bookmark_id LIKE ?1 AND tag IN rarray(?)")
-            .unwrap();
-        match delete_query.execute(params![bookmark.id, values]) {
-            Ok(c) => info!("Deleted {} tags", c),
-            Err(e) => bail!("ERROR: Failed to update databse: {}", e),
-        }
+            .prepare("DELETE FROM `Tag` WHERE bookmark_id LIKE ?1 AND tag IN rarray(?)")?;
 
+        let delete_count = delete_query.execute(params![bookmark.id, values])?;
+
+        let mut add_count = 0;
         for tag in added_tags {
             match self.conn.execute(
                 "INSERT INTO `Tag` (bookmark_id, tag) VALUES (?1, ?2)",
                 params![bookmark.id, tag],
             ) {
-                Ok(_) => info!("Added tag '{}' to '{}'", tag, bookmark.name),
+                Ok(_) => {
+                    info!("Added tag '{}' to '{}'", tag, bookmark.name);
+                    add_count += 1;
+                }
                 Err(_) => error!("Failed to add tag '{}' to '{}'", tag, bookmark.name),
             };
+            add_count += 1;
         }
 
-        Ok(())
+        Ok((add_count, delete_count))
     }
 
-    fn get_tags(&self, bookmark_id: &str) -> TagList {
+    fn get_tags(&self, bookmark_id: &str) -> Result<TagList> {
         let mut tag_query = self
             .conn
-            .prepare("SELECT tag FROM `Tag` WHERE bookmark_id LIKE ?1")
-            .unwrap();
-        tag_query
-            .query_map([bookmark_id], |x| x.get(0))
-            .unwrap()
-            .map(|x| x.unwrap())
-            .collect::<Vec<_>>()
-            .into()
+            .prepare("SELECT tag FROM `Tag` WHERE bookmark_id LIKE ?1")?;
+        let tags = tag_query
+            .query_map([bookmark_id], |x| x.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(TagList(tags))
     }
 
-    pub fn tag_delete(&self, tag: &str) -> Result<usize, SimpleError> {
+    pub fn tag_delete(&self, tag: &str) -> Result<usize> {
         let query = "DELETE FROM `Tag` WHERE tag LIKE ?1";
-        match self.conn.execute(query, [tag]) {
-            Ok(c) => {
-                info!("Removed {} items with tag {}.", c, tag);
-                Ok(c)
-            }
-            Err(e) => bail!("ERROR: Failed to remove tag: {}", e),
-        }
+        let count = self.conn.execute(query, [tag])?;
+        Ok(count)
     }
 
-    pub fn tag_rename(&self, old: &str, new: &str) -> Result<usize, SimpleError> {
+    pub fn tag_rename(&self, old: &str, new: &str) -> Result<usize> {
         let query = "UPDATE `Tag` SET tag = ?1 WHERE tag LIKE ?2";
-        match self.conn.execute(query, [new, old]) {
-            Ok(c) => {
-                info!("Renamed {} items to {}.", c, new);
-                Ok(c)
-            }
-            Err(e) => bail!("ERROR: Failed to rename tag: {}", e),
-        }
+        let count = self.conn.execute(query, [new, old])?;
+        Ok(count)
     }
 }

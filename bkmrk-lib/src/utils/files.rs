@@ -4,9 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use simple_error::{bail, SimpleError};
+use eyre::{eyre, Result, WrapErr};
 
-pub fn get_base_dir() -> Result<PathBuf, SimpleError> {
+pub fn get_base_dir() -> Result<PathBuf> {
     match dirs::home_dir() {
         Some(home_dir) => {
             let base_dir = home_dir.join(".bkmrk");
@@ -15,37 +15,21 @@ pub fn get_base_dir() -> Result<PathBuf, SimpleError> {
             }
             Ok(base_dir)
         }
-        None => bail!("ERROR: Couldn't get home directory."),
+        None => Err(eyre!("ERROR: Couldn't get home directory.")),
     }
 }
 
-pub fn get_db_path() -> Result<PathBuf, SimpleError> {
-    let base_dir = match get_base_dir() {
-        Ok(base_dir) => base_dir,
-        Err(err) => {
-            bail!("ERROR: Couldn't get base configuration directory\n{}", err)
-        }
-    };
+pub fn get_db_path() -> Result<PathBuf> {
+    let base_dir = get_base_dir()?;
     Ok(base_dir.join("data.db"))
 }
 
-pub fn read_file(file_path: &Path) -> Result<String, SimpleError> {
-    match File::open(file_path) {
-        Ok(mut file) => {
-            let mut file_contents = String::new();
-            match file.read_to_string(&mut file_contents) {
-                Ok(_) => Ok(file_contents),
-                Err(err) => bail!(
-                    "ERROR: Couldn't read file `{}`: {}",
-                    file_path.display(),
-                    err
-                ),
-            }
-        }
-        Err(err) => bail!(
-            "ERROR: Couldn't open file `{}`: {}",
-            file_path.display(),
-            err
-        ),
-    }
+pub fn read_file(file_path: &Path) -> Result<String> {
+    let mut file = File::open(file_path)
+        .wrap_err_with(|| format!("ERROR: Couldn't open file {}", file_path.display()))?;
+    let mut file_contents = String::new();
+
+    file.read_to_string(&mut file_contents)
+        .wrap_err_with(|| format!("ERROR: Couldn't read file {}", file_path.display()))?;
+    Ok(file_contents)
 }

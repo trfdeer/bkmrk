@@ -3,9 +3,9 @@ use bkmrk_lib::{
     BkmrkMan,
 };
 use clap::ArgMatches;
-use simple_error::{bail, SimpleError};
+use color_eyre::Result;
 
-pub fn exec_add(args: &ArgMatches) -> Result<(), SimpleError> {
+pub fn exec_add(args: &ArgMatches) -> Result<()> {
     let name: String = args.value_of("name").unwrap().into();
     let link: String = args.value_of("link").unwrap().into();
     let tags: TagList = args
@@ -25,10 +25,7 @@ pub fn exec_add(args: &ArgMatches) -> Result<(), SimpleError> {
     };
 
     let man = BkmrkMan::new();
-    match man.add_bookmark(&new_bookmark) {
-        Ok(_) => println!("Added bookmark."),
-        Err(e) => bail!("ERROR: Failed to add bookmark\n{}", e),
-    };
+    man.add_bookmark(&new_bookmark)?;
 
     Ok(())
 }

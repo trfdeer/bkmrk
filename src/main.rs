@@ -1,15 +1,11 @@
-use std::process::exit;
+use color_eyre::Result;
 
 mod app;
 mod subcommands;
 mod utils;
 
-fn main() {
-    match app::run_app() {
-        Ok(_) => exit(0),
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    }
+fn main() -> Result<()> {
+    color_eyre::install()?;
+    app::run_app()?;
+    Ok(())
 }

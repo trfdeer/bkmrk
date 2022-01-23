@@ -8,7 +8,7 @@ chrono = "0.4"
 dirs = "4.0"
 itertools = "0.10"
 log = "0.4"
-simple-error = "0.2"
+eyre = "0.6"
 rusqlite = { version = "0.26", features = ["bundled", "chrono", "array"] }
 quick-xml = "0.22"
 nanoid = "0.4"

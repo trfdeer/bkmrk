@@ -1,9 +1,9 @@
 use bkmrk_lib::BkmrkMan;
 use clap::ArgMatches;
+use color_eyre::Result;
 use dialoguer::{console::Term, theme::ColorfulTheme, Confirm, Input, Select};
-use simple_error::{bail, SimpleError};
 
-pub fn exec_edit(args: &ArgMatches) -> Result<(), SimpleError> {
+pub fn exec_edit(args: &ArgMatches) -> Result<()> {
     let tags: Vec<String> = args
         .values_of("tags")
         .unwrap_or_default()
@@ -17,10 +17,7 @@ pub fn exec_edit(args: &ArgMatches) -> Result<(), SimpleError> {
 
     let man = BkmrkMan::new();
 
-    let items = match man.get_bookmarks(&tags, &domains) {
-        Ok(r) => r,
-        Err(e) => bail!("ERROR: Failed running edit command.\n{}", e),
-    };
+    let items = man.get_bookmarks(&tags, &domains)?;
 
     let options: Vec<_> = items
         .iter()
@@ -37,38 +34,25 @@ pub fn exec_edit(args: &ArgMatches) -> Result<(), SimpleError> {
 
         if prompt("Update name?") {
             let new_name = get_input("Enter new name", &editing.name);
-            match man.update_bookmark_name(editing, &new_name) {
-                Ok(_) => println!("Name updated to '{}'!", new_name),
-                Err(e) => bail!("ERROR: Failed to update name.\n{}", e),
-            }
+            man.update_bookmark_name(editing, &new_name)?
         }
         if prompt("Update link?") {
             let new_link = get_input("Enter new link", &editing.link);
-            match man.update_bookmark_link(editing, &new_link) {
-                Ok(_) => println!("Link updated to '{}'!", new_link),
-                Err(e) => bail!("ERROR: Failed to update link.\n{}", e),
-            }
+            man.update_bookmark_link(editing, &new_link)?;
         }
         if prompt("Update description?") {
             let new_description = get_input("Enter new description", &editing.description);
-            match man.update_bookmark_descr(editing, &new_description) {
-                Ok(_) => println!("Description updated to '{}'!", new_description),
-                Err(e) => bail!("ERROR: Failed to update description.\n{}", e),
-            }
+            man.update_bookmark_descr(editing, &new_description)?;
         }
         if prompt("Update tags?") {
             let new_tags = get_input(
                 "Enter new tags (separated by commas)",
                 &editing.tags.0.join(", "),
-            );
-            let new_tags = new_tags
-                .split(',')
-                .map(|x| x.trim().to_owned())
-                .collect::<Vec<_>>();
-            match man.update_bookmark_tags(editing, &new_tags) {
-                Ok(_) => println!("Tags updated to '{}'!", new_tags.join(", ")),
-                Err(e) => bail!("ERROR: Failed to update tags.\n{}", e),
-            }
+            )
+            .split(',')
+            .map(|x| x.trim().to_owned())
+            .collect::<Vec<_>>();
+            man.update_bookmark_tags(editing, &new_tags)?;
         }
     }
 

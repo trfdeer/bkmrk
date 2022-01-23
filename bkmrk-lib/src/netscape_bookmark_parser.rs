@@ -1,9 +1,9 @@
 use crate::bookmark::{Bookmark, TagList};
 use crate::utils;
 use chrono::Utc;
+use eyre::{Result, WrapErr};
 use itertools::Itertools;
 use quick_xml::{events::Event, Reader};
-use simple_error::{bail, SimpleError};
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::str;
@@ -11,14 +11,11 @@ use std::str;
 pub fn parse_netscape_bookmark_file(
     file_path: &Path,
     append_folder_tags: bool,
-) -> Result<Vec<Bookmark>, SimpleError> {
-    let file_contents = match utils::files::read_file(file_path) {
-        Ok(res) => res
-            .replace("<DT>", "<DT />")
-            .replace("<DD>", "<DD />")
-            .replace("<p>", "<p />"),
-        Err(e) => bail!("Failed to read file {}\n{}", file_path.display(), e),
-    };
+) -> Result<Vec<Bookmark>> {
+    let file_contents = utils::files::read_file(file_path)?
+        .replace("<DT>", "<DT />")
+        .replace("<DD>", "<DD />")
+        .replace("<p>", "<p />");
 
     let mut reader = Reader::from_str(&file_contents);
     reader.trim_text(true);
@@ -33,8 +30,11 @@ pub fn parse_netscape_bookmark_file(
     let mut bookmarks: Vec<Bookmark> = Vec::new();
 
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Event::Start(ref e)) => match e.name() {
+        match reader
+            .read_event(&mut buf)
+            .wrap_err_with(|| format!("Error at position {}", reader.buffer_position()))?
+        {
+            Event::Start(ref e) => match e.name() {
                 b"TITLE" | b"H1" | b"H3" => {
                     last_event = (str::from_utf8(e.name()).unwrap().to_owned(), "open".into());
                 }
@@ -89,7 +89,7 @@ pub fn parse_netscape_bookmark_file(
                 }
                 _ => (),
             },
-            Ok(Event::End(ref e)) => match e.name() {
+            Event::End(ref e) => match e.name() {
                 b"DL" => {
                     tags.pop_back().unwrap_or_default();
                 }
@@ -98,7 +98,7 @@ pub fn parse_netscape_bookmark_file(
                 }
                 _ => (),
             },
-            Ok(Event::Text(t)) => match (last_event.0.as_str(), last_event.1.as_str()) {
+            Event::Text(t) => match (last_event.0.as_str(), last_event.1.as_str()) {
                 ("TITLE" | "H1" | "H3", "open") => {
                     let new_tag = t.unescape_and_decode(&reader).unwrap();
                     tags.push_back(new_tag);
@@ -118,8 +118,7 @@ pub fn parse_netscape_bookmark_file(
                 }
                 _ => (),
             },
-            Ok(Event::Eof) => break,
-            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+            Event::Eof => break,
             _ => (),
         }
     }

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use bookmark::Bookmark;
 use chrono::Utc;
-use simple_error::{bail, SimpleError};
+use eyre::{Result, WrapErr};
 
 use crate::db::Database;
 
@@ -26,22 +26,12 @@ impl BkmrkMan {
         &self,
         file_path: &Path,
         append_folder_tags: bool,
-    ) -> Result<(usize, usize), SimpleError> {
-        let bookmarks = match netscape_bookmark_parser::parse_netscape_bookmark_file(
-            file_path,
-            append_folder_tags,
-        ) {
-            Ok(t) => t,
-            Err(e) => {
-                bail!(
-                    "ERROR: Couldn't parse input file `{}`\n{}",
-                    file_path.display(),
-                    e
-                )
-            }
-        };
+    ) -> Result<(usize, usize)> {
+        let bookmarks =
+            netscape_bookmark_parser::parse_netscape_bookmark_file(file_path, append_folder_tags)
+                .wrap_err("Failed to parse bookmark file")?;
 
-        let (succeeded, failed) = self.add_bookmarks(&bookmarks).unwrap();
+        let (succeeded, failed) = self.add_bookmarks(&bookmarks)?;
         Ok((succeeded, failed))
     }
 
@@ -49,27 +39,20 @@ impl BkmrkMan {
         &self,
         file_path: &Path,
         append_folder_tags: bool,
-    ) -> Result<Vec<Bookmark>, SimpleError> {
+    ) -> Result<Vec<Bookmark>> {
         netscape_bookmark_parser::parse_netscape_bookmark_file(file_path, append_folder_tags)
     }
 
-    pub fn get_bookmarks(
-        &self,
-        tags: &[String],
-        domains: &[String],
-    ) -> Result<Vec<Bookmark>, SimpleError> {
+    pub fn get_bookmarks(&self, tags: &[String], domains: &[String]) -> Result<Vec<Bookmark>> {
         let items = match (tags.len(), domains.len()) {
             (0, 0) => self.db.get_all(),
             _ => self.db.get(tags, domains),
         };
 
-        match items {
-            Ok(i) => Ok(i),
-            Err(e) => bail!("ERROR: Failed to fetch bookmarks from database\n{}", e),
-        }
+        items.wrap_err("Failed to get bookmarks from database")
     }
 
-    pub fn add_bookmark(&self, bookmark: &Bookmark) -> Result<(), SimpleError> {
+    pub fn add_bookmark(&self, bookmark: &Bookmark) -> Result<()> {
         let mut bookmark = bookmark.to_owned();
         let time_now = Utc::now().timestamp();
         bookmark.added_at = time_now;
@@ -78,47 +61,35 @@ impl BkmrkMan {
         self.db.add_one(&bookmark)
     }
 
-    pub fn add_bookmarks(&self, bookmark: &[Bookmark]) -> Result<(usize, usize), SimpleError> {
+    pub fn add_bookmarks(&self, bookmark: &[Bookmark]) -> Result<(usize, usize)> {
         self.db.add_many(bookmark)
     }
 
-    pub fn delete_bookmarks(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize), SimpleError> {
+    pub fn delete_bookmarks(&self, bookmarks: &[Bookmark]) -> Result<(usize, usize)> {
         self.db.delete_many(bookmarks)
     }
-    pub fn update_bookmark_name(
-        &self,
-        old: &Bookmark,
-        updated_val: &str,
-    ) -> Result<(), SimpleError> {
+    pub fn update_bookmark_name(&self, old: &Bookmark, updated_val: &str) -> Result<()> {
         self.db.update_name(old, updated_val)
     }
-    pub fn update_bookmark_link(
-        &self,
-        old: &Bookmark,
-        updated_val: &str,
-    ) -> Result<(), SimpleError> {
+    pub fn update_bookmark_link(&self, old: &Bookmark, updated_val: &str) -> Result<()> {
         self.db.update_link(old, updated_val)
     }
-    pub fn update_bookmark_descr(
-        &self,
-        old: &Bookmark,
-        updated_val: &str,
-    ) -> Result<(), SimpleError> {
+    pub fn update_bookmark_descr(&self, old: &Bookmark, updated_val: &str) -> Result<()> {
         self.db.update_descr(old, updated_val)
     }
     pub fn update_bookmark_tags(
         &self,
         old: &Bookmark,
         updated_val: &[String],
-    ) -> Result<(), SimpleError> {
+    ) -> Result<(usize, usize)> {
         self.db.update_tags(old, updated_val)
     }
 
-    pub fn tag_rename(&self, tag_name: &str, new_tag_name: &str) -> Result<usize, SimpleError> {
+    pub fn tag_rename(&self, tag_name: &str, new_tag_name: &str) -> Result<usize> {
         self.db.tag_rename(tag_name, new_tag_name)
     }
 
-    pub fn tag_delete(&self, tag_name: &str) -> Result<usize, SimpleError> {
+    pub fn tag_delete(&self, tag_name: &str) -> Result<usize> {
         self.db.tag_delete(tag_name)
     }
 }
