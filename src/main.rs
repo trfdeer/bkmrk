@@ -14,7 +14,8 @@ use subcommands::{
 
 fn main() -> Result<()> {
     color_eyre::install()?;
-    dotenv::dotenv()?;
+
+    dotenv::dotenv().ok();
 
     let args = App::parse();
 

@@ -281,7 +281,7 @@ impl Database {
 
     pub fn update_site_type(&self, bookmark: &Bookmark, new_site_type: &str) -> Result<()> {
         self.conn.execute(
-            "UPDATE `Metadata` SET description = ?1 WHERE bookmark_id LIKE ?2;",
+            "UPDATE `Metadata` SET site_type = ?1 WHERE bookmark_id LIKE ?2;",
             [new_site_type, &bookmark.id],
         )?;
 
