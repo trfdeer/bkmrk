@@ -8,7 +8,8 @@ use crate::db::Database;
 
 pub mod bookmark;
 mod db;
-mod netscape_bookmark_parser;
+mod element;
+mod netscape_parser;
 pub mod site_metadata;
 mod utils;
 
@@ -29,7 +30,7 @@ impl BkmrkMan {
         append_folder_tags: bool,
     ) -> Result<(usize, usize)> {
         let bookmarks =
-            netscape_bookmark_parser::parse_netscape_bookmark_file(file_path, append_folder_tags)
+            netscape_parser::parse_str(&utils::files::read_file(file_path)?, append_folder_tags)
                 .wrap_err("Failed to parse bookmark file")?;
 
         let (succeeded, failed) = self.add_bookmarks(&bookmarks)?;
@@ -41,7 +42,8 @@ impl BkmrkMan {
         file_path: &Path,
         append_folder_tags: bool,
     ) -> Result<Vec<Bookmark>> {
-        netscape_bookmark_parser::parse_netscape_bookmark_file(file_path, append_folder_tags)
+        netscape_parser::parse_str(&utils::files::read_file(file_path)?, append_folder_tags)
+            .wrap_err("Failed to parse bookmark file")
     }
 
     pub fn get_bookmarks(&self, tags: &[String], domains: &[String]) -> Result<Vec<Bookmark>> {
@@ -77,6 +79,12 @@ impl BkmrkMan {
     }
     pub fn update_bookmark_descr(&self, old: &Bookmark, updated_val: &str) -> Result<()> {
         self.db.update_descr(old, updated_val)
+    }
+    pub fn update_bookmark_site_type(&self, old: &Bookmark, updated_val: &str) -> Result<()> {
+        self.db.update_site_type(old, updated_val)
+    }
+    pub fn update_bookmark_image_url(&self, old: &Bookmark, updated_val: &str) -> Result<()> {
+        self.db.update_image_url(old, updated_val)
     }
     pub fn update_bookmark_tags(
         &self,

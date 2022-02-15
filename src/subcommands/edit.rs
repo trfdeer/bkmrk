@@ -23,7 +23,7 @@ pub fn run(args: EditArgs) -> Result<()> {
 
     let options: Vec<_> = items
         .iter()
-        .map(|it| format!("● {} - ({})", it.name, it.link))
+        .map(|it| format!("● {} - ({})", it.metadata.title, it.link))
         .collect();
 
     println!("Select a bookmark to edit (q to cancel):");
@@ -35,7 +35,7 @@ pub fn run(args: EditArgs) -> Result<()> {
         let editing = &items[index];
 
         if prompt("Update name?") {
-            let new_name = get_input("Enter new name", &editing.name);
+            let new_name = get_input("Enter new name", &editing.metadata.title);
             man.update_bookmark_name(editing, &new_name)?
         }
         if prompt("Update link?") {
@@ -43,7 +43,10 @@ pub fn run(args: EditArgs) -> Result<()> {
             man.update_bookmark_link(editing, &new_link)?;
         }
         if prompt("Update description?") {
-            let new_description = get_input("Enter new description", &editing.description);
+            let new_description = get_input(
+                "Enter new description",
+                &editing.metadata.description.to_owned().unwrap_or_default(),
+            );
             man.update_bookmark_descr(editing, &new_description)?;
         }
         if prompt("Update tags?") {

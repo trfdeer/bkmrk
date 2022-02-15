@@ -4,13 +4,15 @@ name = "bkmrk"
 version = "0.1.0"
 
 [dependencies]
-clap = { version = "3.0", features = ["derive"] }
-console = "0.15"
-dialoguer = "0.9"
-fern = "0.6"
-color-eyre = "0.6"
-tabled = "0.4"
-terminal_size = "0.1"
+clap = { version = "3.0.14", features = ["derive"] }
+console = "0.15.0"
+dialoguer = "0.9.0"
+color-eyre = "0.6.0"
+tabled = "0.5.0"
+terminal_size = "0.1.17"
 bkmrk-lib = { path = "./bkmrk-lib", features = ["tables"] }
-chrono = "0.4"
-log = "0.4"
+chrono = "0.4.19"
+log = "0.4.14"
+pretty_env_logger = "0.4.0"
+owo-colors = "3.2.0"
+dotenv = "0.15.0"

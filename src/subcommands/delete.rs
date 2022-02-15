@@ -24,7 +24,7 @@ pub fn run(args: DeleteArgs) -> Result<()> {
 
     let options: Vec<_> = items
         .iter()
-        .map(|it| format!("{} - ({})", it.name, it.link))
+        .map(|it| format!("{} - ({})", it.metadata.title, it.link))
         .collect();
 
     println!("Select bookmarks to edit:");

@@ -1,5 +1,6 @@
 use bkmrk_lib::{
     bookmark::{Bookmark, TagList},
+    site_metadata::SiteMetadata,
     BkmrkMan,
 };
 use color_eyre::Result;
@@ -29,10 +30,13 @@ pub fn run(args: AddArgs) -> Result<()> {
     let description: String = args.description.unwrap_or_else(|| "".into());
 
     let new_bookmark = Bookmark {
-        name,
         link,
         tags,
-        description,
+        metadata: SiteMetadata {
+            title: name,
+            description: Some(description),
+            ..Default::default()
+        },
         ..Default::default()
     };
 

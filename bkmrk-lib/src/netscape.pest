@@ -1,0 +1,34 @@
+netscape = _{SOI ~ doctype? ~ element* ~ EOI }
+
+doctype = { "<!DOCTYPE" ~ ident ~ ">" }
+element = { (tag_no_close | tag_self_close | element_children | element_text) ~ ("<DD>" ~ text)? }
+
+element_children = _{ (tag_open ~ children ~ tag_close) }
+element_text = _{ tag_open ~ innertext ~ tag_close }
+
+children = { element+ }
+innertext = { (!("<" ~ "/" ~ PEEK ~ ">") ~ ANY)* }
+text = { (!("<DT>" | "</DL>") ~ ANY)* }
+
+tag_no_close = _{ "<" ~ tag_names_no_close ~ attributes ~ ">" }
+tag_names_no_close = { ("META" | "DT" | "p") }
+
+tag_self_close = _{ "<" ~ ident ~ attributes ~ "/" ~ ">" }
+tag_close = _{ "<" ~ "/" ~ POP ~ ">" }
+tag_open = _{ "<" ~ PUSH(ident) ~ attributes ~ ">" }
+
+attributes = { (attribute | attribute_bool)* }
+attribute = {ident ~ "=" ~ string}
+attribute_bool = { ident }
+ident = @{ (ASCII_ALPHA | ASCII_DIGIT | "-" | "_")+ }
+
+string = _{ "\"" ~ string_contents ~ "\"" }
+string_contents = @{ char* }
+char = {
+    !("\"" | "\\") ~ ANY
+    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+    | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "<!--" ~ (!("-->") ~ ANY)* ~ "-->" }

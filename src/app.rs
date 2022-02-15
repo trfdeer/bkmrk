@@ -81,6 +81,22 @@ pub enum Commands {
         domains: Vec<String>,
     },
 
+    #[clap(visible_alias = "u")]
+    /// Update bookmark details
+    Update {
+        #[clap(short, long)]
+        /// Show bookmarks from these tags only
+        tags: Vec<String>,
+
+        #[clap(short, long)]
+        /// Show bookmarks from these sites only
+        domains: Vec<String>,
+
+        #[clap(short, long)]
+        /// Confirm without prompts
+        yes: bool,
+    },
+
     #[clap(visible_alias = "i")]
     /// Import bookmarks from a file
     Import {
@@ -124,25 +140,4 @@ pub enum Commands {
         /// Delete tag
         delete: bool,
     },
-}
-
-pub fn setup_logger(verbose: bool) -> Result<(), fern::InitError> {
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
-                record.target(),
-                record.level(),
-                message
-            ))
-        })
-        .level(if verbose {
-            log::LevelFilter::Debug
-        } else {
-            log::LevelFilter::Error
-        })
-        .chain(std::io::stdout())
-        .apply()?;
-    Ok(())
 }

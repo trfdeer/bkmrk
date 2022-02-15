@@ -4,19 +4,30 @@ mod app;
 mod subcommands;
 mod utils;
 
-use app::{setup_logger, App, Commands};
-use subcommands::*;
+use app::{App, Commands};
 
-use crate::subcommands::{
+use subcommands::*;
+use subcommands::{
     add::AddArgs, delete::DeleteArgs, edit::EditArgs, import::ImportArgs, ls::ListArgs,
-    tag::TagArgs,
+    tag::TagArgs, update::UpdateArgs,
 };
 
 fn main() -> Result<()> {
     color_eyre::install()?;
+    dotenv::dotenv()?;
+
     let args = App::parse();
-    setup_logger(args.verbose)?;
+
+    if args.verbose {
+        match std::env::var("RUST_LOG") {
+            Ok(c) => println!("Using log config: {c}"),
+            Err(_) => std::env::set_var("RUST_LOG", "bkmrk=debug,bkmrk_lib=debug"),
+        }
+    }
+
+    pretty_env_logger::init_timed();
     run_app(args.command)?;
+
     Ok(())
 }
 
@@ -35,6 +46,9 @@ pub fn run_app(command: Commands) -> Result<()> {
             tags,
         } => ls::run(ListArgs::new(output_type, format_string, tags, domains))?,
         Commands::Edit { domains, tags } => edit::run(EditArgs::new(tags, domains))?,
+        Commands::Update { domains, tags, yes } => {
+            update::run(UpdateArgs::new(tags, domains, yes))?
+        }
         Commands::Import {
             input_file,
             append_folder_tags,

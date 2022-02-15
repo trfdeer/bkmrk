@@ -1,4 +1,4 @@
-use crate::utils;
+use crate::{site_metadata::SiteMetadata, utils};
 use std::fmt::Display;
 #[cfg(feature = "tables")]
 use tabled::*;
@@ -18,26 +18,45 @@ impl From<Vec<String>> for TagList {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "tables", derive(Tabled))]
+#[derive(Debug, Default, Clone)]
 pub struct Bookmark {
-    #[cfg_attr(feature = "tables", header(hidden = true))]
     pub id: String,
-    pub name: String,
     pub link: String,
-    #[cfg_attr(feature = "tables", header(hidden = true))]
     pub added_at: i64,
-    #[cfg_attr(feature = "tables", header(hidden = true))]
     pub last_modified: i64,
+    pub metadata: SiteMetadata,
     pub tags: TagList,
-    pub description: String,
+}
+
+#[cfg(feature = "tables")]
+impl Tabled for Bookmark {
+    const LENGTH: usize = 4;
+
+    fn fields(&self) -> Vec<String> {
+        vec![
+            unescape::unescape(&self.metadata.title).unwrap_or(self.metadata.title.to_owned()),
+            self.link.to_owned(),
+            unescape::unescape(&self.metadata.description.to_owned().unwrap_or_default())
+                .unwrap_or(self.metadata.description.to_owned().unwrap_or_default()),
+            self.tags.to_string(),
+        ]
+    }
+
+    fn headers() -> Vec<String> {
+        vec![
+            "Title".into(),
+            "Link".into(),
+            "Description".into(),
+            "Tags".into(),
+        ]
+    }
 }
 
 impl Bookmark {
     pub fn format(&self, format_string: &str) -> String {
         let result = String::from(format_string);
 
-        let result = result.replace("%n", &unescape::unescape(&self.name).unwrap());
+        let result = result.replace("%n", &unescape::unescape(&self.metadata.title).unwrap());
         let result = result.replace("%l", &unescape::unescape(&self.link).unwrap());
         let result = result.replace(
             "%a",
@@ -50,7 +69,7 @@ impl Bookmark {
         let result = result.replace("%t", &unescape::unescape(&self.tags.0.join(", ")).unwrap());
         let result = result.replace(
             "%d",
-            &unescape::unescape(self.description.as_str()).unwrap(),
+            &unescape::unescape(&self.metadata.description.to_owned().unwrap_or_default()).unwrap(),
         );
 
         result
@@ -59,6 +78,6 @@ impl Bookmark {
 
 impl Display for Bookmark {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} - {} [{}]", self.name, self.link, self.tags,)
+        write!(f, "{} - {} [{}]", self.metadata.title, self.link, self.tags,)
     }
 }

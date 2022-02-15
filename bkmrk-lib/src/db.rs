@@ -6,29 +6,38 @@ use log::{error, info};
 use nanoid::nanoid;
 use rusqlite::{params, types::Value, Connection};
 
-use crate::bookmark::{Bookmark, TagList};
+use crate::{
+    bookmark::{Bookmark, TagList},
+    site_metadata::{SiteMetadata, SiteType},
+};
 
 #[derive(Debug)]
 pub struct Database {
     conn: Connection,
 }
 
-#[allow(dead_code)]
 impl Database {
     pub fn create_tables(&self) -> Result<()> {
         let query = "
             CREATE TABLE IF NOT EXISTS `Bookmark`(
                 id CHAR(6) PRIMARY KEY,
-                name VARCHAR(300) NOT NULL,
                 link VARCHAR(300) NOT NULL UNIQUE,
                 added_at DATETIME NOT NULL,
-                last_modified DATETIME NOT NULL,
-                description TEXT
+                last_modified DATETIME NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS `Tag`(
                 bookmark_id NOT NULL,
                 tag VARCHAR(100),
+                FOREIGN KEY (bookmark_id) REFERENCES `Bookmark`(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS `Metadata`(
+                bookmark_id NOT NULL,
+                title VARCHAR(300) NOT NULL,
+                description TEXT,
+                image_url TEXT,
+                site_type VARCHAR(20),
                 FOREIGN KEY (bookmark_id) REFERENCES `Bookmark`(id)
             );";
         self.conn.execute_batch(query)?;
@@ -58,8 +67,8 @@ impl Database {
             &['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f']
         );
         self.conn.execute(
-            "INSERT INTO `Bookmark` (id, name, link, added_at, last_modified, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![id, bookmark.name, bookmark.link, bookmark.added_at, bookmark.last_modified, bookmark.description],
+            "INSERT INTO `Bookmark` (id, link, added_at, last_modified) VALUES (?1, ?2, ?3, ?4)",
+            params![id, bookmark.link, bookmark.added_at, bookmark.last_modified],
         )?;
 
         for tag in &bookmark.tags.0 {
@@ -69,6 +78,11 @@ impl Database {
             )?;
         }
 
+        self.conn.execute(
+            "INSERT INTO `Metadata` (bookmark_id, title, description, image_url, site_type) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, bookmark.metadata.title, bookmark.metadata.description, bookmark.metadata.image_url, bookmark.metadata.site_type.to_string()],
+        )?;
+
         Ok(())
     }
 
@@ -77,11 +91,11 @@ impl Database {
         for bookmark in bookmarks {
             match self.add_one(bookmark) {
                 Ok(_) => {
-                    info!("Added bookmark '{}'", bookmark.name);
+                    info!("Added bookmark '{}'", bookmark.metadata.title);
                     succeeded += 1;
                 }
                 Err(e) => {
-                    error!("Couldn't add \"{}\": {}", bookmark.name, e);
+                    error!("Couldn't add \"{}\": {}", bookmark.metadata.title, e);
                     failed += 1;
                 }
             };
@@ -93,11 +107,18 @@ impl Database {
     pub fn delete_one(&self, bookmark_id: &str) -> Result<()> {
         self.conn
             .execute("DELETE FROM `Tag` WHERE bookmark_id LIKE ?1", [bookmark_id])
-            .wrap_err("Couldn't bookmark")?;
+            .wrap_err("Couldn't delete related tags")?;
+
+        self.conn
+            .execute(
+                "DELETE FROM `Metadata` WHERE bookmark_id LIKE ?1",
+                [bookmark_id],
+            )
+            .wrap_err("Couldn't delete bookmark metadata")?;
 
         self.conn
             .execute("DELETE FROM `Bookmark` WHERE id LIKE ?1", [bookmark_id])
-            .wrap_err("Couldn't delete related tags")?;
+            .wrap_err("Couldn't delete bookmark")?;
 
         Ok(())
     }
@@ -107,13 +128,13 @@ impl Database {
         for bookmark in bookmarks {
             match self.delete_one(&bookmark.id) {
                 Ok(_) => {
-                    info!("Deleted {}", bookmark.name);
+                    info!("Deleted {}", bookmark.metadata.title);
                     succeeded += 1;
                 }
                 Err(e) => {
                     error!(
                         "ERROR: Failed to delete bookmark: \"{}\"\n{}",
-                        bookmark.name, e
+                        bookmark.metadata.title, e
                     );
                     failed += 1;
                 }
@@ -123,17 +144,24 @@ impl Database {
     }
 
     pub fn get_all(&self) -> Result<Vec<Bookmark>> {
-        let mut select_statement = self.conn.prepare("SELECT * FROM `Bookmark`")?;
+        let mut select_statement = self
+            .conn
+            .prepare("SELECT b.id, b.link, b.added_at, b.last_modified, m.title, m.description, m.image_url, m.site_type FROM `Bookmark` AS b, `Metadata` AS m WHERE b.id = m.bookmark_id")?;
         let matches: Vec<Bookmark> = select_statement
             .query_map([], |row| {
                 let id: String = row.get_unwrap(0);
                 let item = Bookmark {
                     id: row.get_unwrap(0),
-                    name: row.get_unwrap(1),
-                    link: row.get_unwrap(2),
-                    added_at: row.get_unwrap(3),
-                    last_modified: row.get_unwrap(4),
-                    description: row.get_unwrap(5),
+                    link: row.get_unwrap(1),
+                    added_at: row.get_unwrap(2),
+                    last_modified: row.get_unwrap(3),
+                    metadata: SiteMetadata {
+                        title: row.get_unwrap(4),
+                        description: row.get_unwrap(5),
+                        image_url: row.get_unwrap(6),
+                        site_type: SiteType::from(&row.get_unwrap::<usize, String>(7)),
+                        ..Default::default()
+                    },
                     tags: self
                         .get_tags(&id)
                         .map_err(|_| rusqlite::Error::QueryReturnedNoRows)?,
@@ -146,7 +174,7 @@ impl Database {
     }
 
     pub fn get(&self, tags: &[String], domains: &[String]) -> Result<Vec<Bookmark>> {
-        let mut select_statement: String = "SELECT * FROM `Bookmark` WHERE ".into();
+        let mut select_statement: String = "SELECT b.id, b.link, b.added_at, b.last_modified, m.title, m.description, m.image_url, m.site_type FROM `Bookmark` AS b, `Metadata` AS m WHERE b.id = m.bookmark_id AND ".into();
 
         if !tags.is_empty() {
             select_statement += &format!(
@@ -175,11 +203,16 @@ impl Database {
                 let id: String = row.get_unwrap(0);
                 let item = Bookmark {
                     id: row.get_unwrap(0),
-                    name: row.get_unwrap(1),
-                    link: row.get_unwrap(2),
-                    added_at: row.get_unwrap(3),
-                    last_modified: row.get_unwrap(4),
-                    description: row.get_unwrap(5),
+                    link: row.get_unwrap(1),
+                    added_at: row.get_unwrap(2),
+                    last_modified: row.get_unwrap(3),
+                    metadata: SiteMetadata {
+                        title: row.get_unwrap(4),
+                        description: row.get_unwrap(5),
+                        image_url: row.get_unwrap(6),
+                        site_type: SiteType::from(&row.get_unwrap::<usize, String>(7)),
+                        ..Default::default()
+                    },
                     tags: self
                         .get_tags(&id)
                         .map_err(|_| rusqlite::Error::QueryReturnedNoRows)?,
@@ -194,10 +227,14 @@ impl Database {
     }
 
     pub fn update_name(&self, bookmark: &Bookmark, new_name: &str) -> Result<()> {
-        let query = "UPDATE `Bookmark` SET name = ?1, last_modified = ?2 WHERE id LIKE ?3;";
         self.conn.execute(
-            query,
-            [new_name, &Utc::now().timestamp().to_string(), &bookmark.id],
+            "UPDATE `Metadata` SET title = ?1 WHERE bookmark_id LIKE ?2;",
+            [new_name, &bookmark.id],
+        )?;
+
+        self.conn.execute(
+            "UPDATE `Bookmark` SET last_modified = ?1 WHERE id LIKE ?2;",
+            [&Utc::now().timestamp().to_string(), &bookmark.id],
         )?;
 
         Ok(())
@@ -215,14 +252,42 @@ impl Database {
     }
 
     pub fn update_descr(&self, bookmark: &Bookmark, new_description: &str) -> Result<()> {
-        let query = "UPDATE `Bookmark` SET description = ?1, last_modified = ?2 WHERE id LIKE ?3;";
         self.conn.execute(
-            query,
-            [
-                new_description,
-                &Utc::now().timestamp().to_string(),
-                &bookmark.id,
-            ],
+            "UPDATE `Metadata` SET description = ?1 WHERE bookmark_id LIKE ?2;",
+            [new_description, &bookmark.id],
+        )?;
+
+        self.conn.execute(
+            "UPDATE `Bookmark` SET last_modified = ?1 WHERE id LIKE ?2;",
+            [&Utc::now().timestamp().to_string(), &bookmark.id],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn update_image_url(&self, bookmark: &Bookmark, new_image_url: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE `Metadata` SET image_url = ?1 WHERE bookmark_id LIKE ?2;",
+            [new_image_url, &bookmark.id],
+        )?;
+
+        self.conn.execute(
+            "UPDATE `Bookmark` SET last_modified = ?1 WHERE id LIKE ?2;",
+            [&Utc::now().timestamp().to_string(), &bookmark.id],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn update_site_type(&self, bookmark: &Bookmark, new_site_type: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE `Metadata` SET description = ?1 WHERE bookmark_id LIKE ?2;",
+            [new_site_type, &bookmark.id],
+        )?;
+
+        self.conn.execute(
+            "UPDATE `Bookmark` SET last_modified = ?1 WHERE id LIKE ?2;",
+            [&Utc::now().timestamp().to_string(), &bookmark.id],
         )?;
 
         Ok(())
@@ -257,10 +322,13 @@ impl Database {
                 params![bookmark.id, tag],
             ) {
                 Ok(_) => {
-                    info!("Added tag '{}' to '{}'", tag, bookmark.name);
+                    info!("Added tag '{}' to '{}'", tag, bookmark.metadata.title);
                     add_count += 1;
                 }
-                Err(_) => error!("Failed to add tag '{}' to '{}'", tag, bookmark.name),
+                Err(_) => error!(
+                    "Failed to add tag '{}' to '{}'",
+                    tag, bookmark.metadata.title
+                ),
             };
             add_count += 1;
         }
