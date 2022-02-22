@@ -346,6 +346,21 @@ impl Database {
         Ok(TagList(tags))
     }
 
+    pub fn tag_counts(&self) -> Result<Vec<(String, usize)>> {
+        let mut tag_query = self.conn.prepare(
+            "SELECT tag, COUNT(tag) AS count FROM `Tag` GROUP BY tag ORDER BY COUNT(tag) desc",
+        )?;
+        let results = tag_query
+            .query_map([], |row| {
+                let tag_name = row.get(0)?;
+                let count = row.get(1)?;
+                Ok((tag_name, count))
+            })?
+            .map(|x| x.unwrap())
+            .collect::<Vec<(String, usize)>>();
+        Ok(results)
+    }
+
     pub fn tag_delete(&self, tag: &str) -> Result<usize> {
         let query = "DELETE FROM `Tag` WHERE tag LIKE ?1";
         let count = self.conn.execute(query, [tag])?;

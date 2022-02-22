@@ -101,4 +101,8 @@ impl BkmrkMan {
     pub fn tag_delete(&self, tag_name: &str) -> Result<usize> {
         self.db.tag_delete(tag_name)
     }
+
+    pub fn tag_counts(&self) -> Result<Vec<(String, usize)>> {
+        self.db.tag_counts()
+    }
 }

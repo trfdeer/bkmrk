@@ -129,14 +129,18 @@ pub enum Commands {
     #[clap(visible_alias = "t")]
     /// Manage tags
     Tag {
-        /// Name of tag to manage
-        name: String,
-
         #[clap(short, long)]
+        /// List all tags
+        list: bool,
+
+        /// Name of tag to manage
+        name: Option<String>,
+
+        #[clap(short, long, requires = "name")]
         /// New tag name to rename to
         rename: Option<String>,
 
-        #[clap(short, long)]
+        #[clap(short, long, requires = "name")]
         /// Delete tag
         delete: bool,
     },

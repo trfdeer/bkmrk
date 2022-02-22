@@ -64,9 +64,10 @@ pub fn run_app(command: Commands) -> Result<()> {
         Commands::Delete { tags, domains } => delete::run(DeleteArgs::new(tags, domains))?,
         Commands::Tag {
             name,
+            list,
             rename,
             delete,
-        } => tag::run(TagArgs::new(name, rename, delete))?,
+        } => tag::run(TagArgs::new(name, list, rename, delete))?,
     }
 
     Ok(())
